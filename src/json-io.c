@@ -21,6 +21,8 @@
  * 1. We do not enforce at parse time that non-optional fields are present.
  * 2. We do not check for trailing extraneous data after the JSON root
  *    object.
+ * 3. We neither implement nor ignore report.parameters (parse)
+ * 4. We neither implement nor ignore report.conflict   (parse)
  */
 
 #define _XOPEN_SOURCE 500
@@ -58,6 +60,9 @@
 #define YANG_CONFIG_TRUE        0x01
 #define YANG_CONFIG_FALSE       0x02
 #define YANG_KEY                0x04
+
+/* portable, dangerous version of __attribute__((__unused__)) */
+#define UNUSED(x) (void)(x)
 
 /* callback function types */
 typedef int (lmap_json_file_parse_func)(struct lmap *, const char *);
@@ -321,12 +326,284 @@ parse_config_doc(struct lmap *lmap, json_object *root)
  * report
  */
 
-/* FIXME: implement this */
+/* FIXME: unimplemented in lmapd */
+static int
+xx_lrst_function(void *p, json_object *ctx, int unused)
+{ lmap_wrn("table function list not implemented yet"); return 0; }
+
+/* FIXME: unimplemented in lmapd */
+static int
+xx_lrst_column(void *p, json_object *ctx, int unused)
+{ lmap_wrn("table column list not implemented yet"); return 0; }
+
+static int
+parse_report_result_table_value(void *p, const char *s)
+{
+    struct row *row = p;
+    struct value *row_value;
+    int res = -1;
+
+    row_value = lmap_value_new();
+    if (!row_value)
+	return -1;
+
+    res = lmap_value_set_value(row_value, s);
+    if (!res)
+	res = lmap_row_add_value(row, row_value);
+
+    if (res)
+	lmap_value_free(row_value);
+
+    return res;
+}
+
+static int
+parse_report_result_table_row(void *p, json_object *ctx, int unused)
+{
+    struct table *restbl = p;
+    struct row *row;
+    int res = -1;
+
+    const struct lmap_jsonmap tab[] = {
+	JSONMAP_ENTRY_STRARRAY_X(value, 0, parse_report_result_table_value),
+	{ .name = NULL }
+    };
+
+    UNUSED(unused);
+
+    if (!ctx)
+	return 0; /* do not insert an empty row */
+
+    row = lmap_row_new();
+    if (!row)
+	return -1;
+
+    if (json_object_is_type(ctx, json_type_object)) {
+	json_object_object_foreach(ctx, key, jo) {
+	    res = lookup_jsonmap(row, 0, key, jo, tab);
+	    if (res)
+		break;
+	}
+    }
+
+    if (!res)
+	res = lmap_table_add_row(restbl, row);
+
+    if (res) {
+	lmap_wrn("invalid result table row");
+	lmap_row_free(row);
+    }
+
+    return res;
+}
+
+/* ctx is an array member of "report.result.table" or NULL */
+static int
+parse_report_result_table(void *p, json_object *ctx, int unused)
+{
+    struct result *resctx = p;
+    struct table *restbl = NULL;
+    int res = -1;
+
+    const struct lmap_jsonmap tab[] = {
+	JSONMAP_ENTRY_OBJARRAY(function, 0, xx_lrst),
+	JSONMAP_ENTRY_OBJARRAY(column,   0, xx_lrst),
+	JSONMAP_ENTRY_OBJARRAY_X(row, 0, parse_report_result_table_row)
+    };
+
+    UNUSED(unused);
+
+    restbl = lmap_table_new();
+    if (!restbl)
+	return -1;
+
+    if (json_object_is_type(ctx, json_type_object)) {
+	json_object_object_foreach(ctx, key, jo) {
+	    res = lookup_jsonmap(restbl, 0, key, jo, tab);
+	    if (res)
+		break;
+	}
+    }
+
+    if (!res) {
+	res = lmap_result_add_table(resctx, restbl);
+    } else {
+	lmap_wrn("incorrect report result table");
+    }
+
+    if (res)
+	lmap_table_free(restbl);
+
+    return res;
+}
+
+static int xx_lrs_schedule(void *p, const char *s)
+{ struct result *r = p; return lmap_result_set_schedule(r, s); }
+
+static int xx_lrs_action(void *p, const char *s)
+{ struct result *r = p; return lmap_result_set_action(r, s); }
+
+static int xx_lrs_task(void *p, const char *s)
+{ struct result *r = p; return lmap_result_set_task(r, s); }
+
+static int xx_lrs_tag(void *p, const char *s)
+{ struct result *r = p; return lmap_result_add_tag(r, s); }
+
+static int xx_lrs_event(void *p, const char *s)
+{ struct result *r = p; return lmap_result_set_event(r, s); }
+
+static int xx_lrs_start(void *p, const char *s)
+{ struct result *r = p; return lmap_result_set_start(r, s); }
+
+static int xx_lrs_end(void *p, const char *s)
+{ struct result *r = p; return lmap_result_set_end(r, s); }
+
+static int xx_lrs_cycle_number(void *p, const char *s)
+{ struct result *r = p; return lmap_result_set_cycle_number(r, s); }
+
+static int xx_lrs_status(void *p, const char *s)
+{ struct result *r = p; return lmap_result_set_status(r, s); }
+
+/* ctx is an array member of "report.result.option" or NULL */
+static int parse_report_result_option(void *p, json_object *ctx, int unused)
+{
+    struct result *r = p;
+    struct option *lmapo;
+    int res = -1;
+
+    UNUSED(unused);
+
+    lmapo = parse_option(ctx, PARSE_CONFIG_TRUE | PARSE_CONFIG_FALSE);
+    if (lmapo)
+	res = lmap_result_add_option(r, lmapo);
+
+    return res;
+}
+
+/* ctx is an array member of "report.result" or NULL */
+static int
+parse_report_result(void *p, json_object *ctx, int unused)
+{
+    struct lmap *lmap = p;
+    struct result *resctx;
+    int res = -1;
+
+    const struct lmap_jsonmap tab[] = {
+	JSONMAP_ENTRY_STRING(schedule, 0, xx_lrs),
+	JSONMAP_ENTRY_STRING(action,   0, xx_lrs),
+	JSONMAP_ENTRY_STRING(task,     0, xx_lrs),
+	JSONMAP_ENTRY_STRING(event,    0, xx_lrs),
+	JSONMAP_ENTRY_STRING(start,    0, xx_lrs),
+	JSONMAP_ENTRY_STRING(end,      0, xx_lrs),
+	JSONMAP_ENTRY_STRING_X(cycle-number, 0, xx_lrs_cycle_number),
+	JSONMAP_ENTRY_INT2STR(status,  0, xx_lrs),
+	JSONMAP_ENTRY_STRARRAY(tag,    0, xx_lrs),
+	JSONMAP_ENTRY_OBJARRAY(option, 0, parse_report_result),
+	JSONMAP_ENTRY_OBJARRAY(table,  0, parse_report_result),
+	{ .name = NULL }
+    };
+
+    UNUSED(unused);
+
+    if (!ctx)
+	return 0; /* empty result table... */
+
+    resctx = lmap_result_new();
+    if (!resctx)
+	return -1;
+
+    json_object_object_foreach(ctx, key, jo) {
+	res = lookup_jsonmap(resctx, 0, key, jo, tab);
+	if (res)
+	    break;
+    }
+
+    if (!res)
+	res = lmap_add_result(lmap, resctx);
+    else
+	lmap_wrn("invalid result in report result array");
+
+    if (res)
+	lmap_result_free(resctx);
+
+    return 0; /* FIXME: xml-io does the same, continue without the result */
+}
+
+static int xx_lrs_date(void *p, const char *s)
+{ struct lmap *lmap = p; return lmap_agent_set_report_date(lmap->agent, s); }
+
+static int xx_las_agent_id(void *p, const char *s)
+{
+    struct lmap *lmap = p;
+    int res = lmap_agent_set_agent_id(lmap->agent, s);
+    if (!res)
+	lmap_agent_set_report_agent_id(lmap->agent, "true");
+    return res;
+}
+
+static int xx_las_group_id(void *p, const char *s)
+{
+    struct lmap *lmap = p;
+    int res = lmap_agent_set_group_id(lmap->agent, s);
+    if (!res)
+	lmap_agent_set_report_group_id(lmap->agent, "true");
+    return res;
+}
+
+static int xx_las_measurement_point(void *p, const char *s)
+{
+    struct lmap *lmap = p;
+    int res = lmap_agent_set_measurement_point(lmap->agent, s);
+    if (!res)
+	lmap_agent_set_report_measurement_point(lmap->agent, "true");
+    return res;
+}
+
 static int
 parse_report_doc(struct lmap *lmap, json_object *root)
 {
-    lmap_err("JSON parsing of report documents not implemented yet");
-    return -1;
+    json_object *report_obj = NULL;
+    int res = -1;
+
+    const struct lmap_jsonmap tab[] = {
+	JSONMAP_ENTRY_STRING_X(date,     0, xx_lrs_date),
+	JSONMAP_ENTRY_STRING_X(agent-id, 0, xx_las_agent_id),
+	JSONMAP_ENTRY_STRING_X(group-id, 0, xx_las_group_id),
+	JSONMAP_ENTRY_STRING_X(measurement-point, 0, xx_las_measurement_point),
+	JSONMAP_ENTRY_OBJARRAY_X(result, 0, parse_report_result),
+	{ .name = NULL }
+    };
+
+    if (!root)
+	goto err_exit;
+
+    /* must be an object with a single field, report, which is
+     * also an object */
+    if (!json_object_object_get_ex(root, "ietf-lmap-report:report", &report_obj)
+	 && !json_object_object_get_ex(root, "report", &report_obj))
+	goto err_exit;
+    if (json_object_object_length(root) != 1
+	|| !json_object_is_type(report_obj, json_type_object))
+	goto err_exit;
+
+    if (!lmap->agent) {
+	lmap->agent = lmap_agent_new();
+	if (! lmap->agent)
+            return -1;
+    }
+
+    /* iterate the inner "report" object */
+    json_object_object_foreach(report_obj, ctxkey, jo) {
+	res = lookup_jsonmap(lmap, 0, ctxkey, jo, tab);
+	if (res)
+	    break;
+    }
+
+err_exit:
+    if (res)
+	lmap_err("could not read report data");
+
+    return res;
 }
 
 
