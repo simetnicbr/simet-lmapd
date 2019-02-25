@@ -23,6 +23,8 @@
  *    object.
  * 3. We neither implement nor ignore report.parameters (parse)
  * 4. We neither implement nor ignore report.conflict   (parse)
+ * 5. Consolidate all the "foos": { "foo": [ ] } drivers into calls
+ *    to a single helper function.
  */
 
 #define _XOPEN_SOURCE 500
@@ -159,6 +161,26 @@ struct lmap_jsonmap {
 
 #define JSONMAP_ENTRY_OBJECT(aname, aflag, afprefix) \
     JSONMAP_ENTRY_OBJECT_X(aname, aflag, afprefix ## _ ## aname)
+
+/* RFC-7951 demands that empty == [null], but we accept other
+ * ways to represent an existing-but-empty json field as well */
+static int lmap_json_object_is_empty(json_object * const jobj)
+{
+    switch (json_object_get_type(jobj)) {
+    case json_type_array:
+	/* empty array or array with a null element are acceptable */
+	return !!(json_object_array_length(jobj) == 0
+		|| (json_object_array_length(jobj) == 1
+		    && json_object_is_type(json_object_array_get_idx(jobj, 0), json_type_null)));
+    case json_type_object:
+	/* empty object is acceptable */
+	return !!(json_object_object_length(jobj) == 0);
+    /* maybe also json_type_string and an empty string? */
+    default:
+	/* anything else exists and has some sort of content */
+	return 0;
+    }
+}
 
 /*
  * returns -1 on error (and reports it)
@@ -302,12 +324,910 @@ parse_option(json_object *ctx, int what)
  * state fields that are not present in config.
  */
 
-/* FIXME: implement this */
+
+/* parse registry (function) list */
+
 static int
-parse_control_doc(struct lmap *lmap, json_object *root, int flags)
+xx_lreg_uri(void *p, const char *s)
+{ struct registry *registry = p; return lmap_registry_set_uri(registry, s); }
+
+static int
+xx_lreg_role(void *p, const char *s)
+{ struct registry *registry = p; return lmap_registry_add_role(registry, s); }
+
+/* ctx is an array member of "function" or NULL */
+static struct registry *
+parse_registry(json_object *ctx, int what)
 {
-    lmap_err("JSON parsing of config and state documents not implemented yet");
-    return -1;
+    struct registry *registry;
+    int res = -1;
+
+    const struct lmap_jsonmap tab[] = {
+	JSONMAP_ENTRY_STRING(uri,    YANG_CONFIG_TRUE, xx_lreg),
+	JSONMAP_ENTRY_STRARRAY(role, YANG_CONFIG_TRUE, xx_lreg),
+	{ .name = NULL }
+    };
+
+    if (!ctx)
+	return NULL;
+
+    registry = lmap_registry_new();
+    if (!registry)
+	return NULL;
+
+    if (json_object_is_type(ctx, json_type_object)) {
+	json_object_object_foreach(ctx, key, jo) {
+	    res = lookup_jsonmap(registry, what, key, jo, tab);
+	    if (res)
+		break;
+	}
+    }
+
+    if (res) {
+	lmap_wrn("invalid function in function array");
+	lmap_registry_free(registry);
+	registry = NULL;
+    }
+
+    return registry;
+}
+
+/* parsing of tasks.task structures */
+
+typedef int (task_item_add_func)(void *p, struct task *task);
+
+static int
+xx_lt_name(void *p, const char *s)
+{ struct task *task = p; return lmap_task_set_name(task, s); }
+
+static int
+xx_lt_program(void *p, const char *s)
+{ struct task *task = p; return lmap_task_set_program(task, s); }
+
+static int
+xx_lt_version(void *p, const char *s)
+{ struct task *task = p; return lmap_task_set_version(task, s); }
+
+static int
+xx_lt_tag(void *p, const char *s)
+{ struct task *task = p; return lmap_task_add_tag(task, s); }
+
+/* ctx is an array member of "tasks.task.option" or NULL */
+static int xx_lt_option(void *p, json_object *ctx, int what)
+{
+    struct task *task = p;
+    struct option *option;
+    int res = -1;
+
+    option = parse_option(ctx, what);
+    if (option)
+	res = lmap_task_add_option(task, option);
+
+    return res;
+}
+
+/* ctx is an array member of "tasks.task.function" or NULL */
+static int xx_lt_function(void *p, json_object *ctx, int what)
+{
+    struct task *task = p;
+    struct registry *registry;
+    int res = -1;
+
+    registry = parse_registry(ctx, what);
+    if (registry)
+	res = lmap_task_add_registry(task, registry);
+
+    return res;
+}
+
+static struct task *
+parse_task(json_object *ctx, int what)
+{
+    struct task *task;
+    int res = -1;
+
+    /* NOTE: unusual handling of "what", see parse_tasks() */
+    const struct lmap_jsonmap tab[] = {
+	JSONMAP_ENTRY_STRING(name,       YANG_KEY,                             xx_lt),
+	JSONMAP_ENTRY_STRING(program,    YANG_CONFIG_TRUE | YANG_CONFIG_FALSE, xx_lt),
+	JSONMAP_ENTRY_STRING(version,                       YANG_CONFIG_FALSE, xx_lt),
+	JSONMAP_ENTRY_STRARRAY(tag,      YANG_CONFIG_TRUE,                     xx_lt),
+	JSONMAP_ENTRY_OBJARRAY(option,   YANG_CONFIG_TRUE,                     xx_lt),
+	JSONMAP_ENTRY_OBJARRAY(function, YANG_CONFIG_TRUE | YANG_CONFIG_FALSE, xx_lt),
+	{ .name = NULL }
+    };
+
+    if (!ctx || !json_object_is_type(ctx, json_type_object))
+	return NULL;
+
+    task = lmap_task_new();
+    if (!task)
+	return NULL;
+
+    json_object_object_foreach(ctx, key, jo) {
+	res = lookup_jsonmap(task, what, key, jo, tab);
+	if (res)
+	    break;
+    }
+
+    if (res) {
+	lmap_task_free(task);
+	task = NULL;
+    }
+
+    return task;
+}
+
+/*
+ * NOTE: unusual handling of "what" required for normal use:
+ * Either set PARSE_CONFIG_TRUE or PARSE_CONFIG_FALSE, not both.
+ *
+ * CONFIG_TRUE  enables fields valid in lmap::tasks::task
+ * CONFIG_FALSE enables fields valid in lmap::capabilities::task
+ */
+static int
+parse_tasks(void *p, json_object *ctx, int what, task_item_add_func *task_add)
+{
+    json_object *task_obj = NULL;
+    struct task *task;
+    int res, i;
+
+    /* ctx must be an object with a single field "task", which is an array */
+    if (!ctx)
+	return -1;
+    if (!json_object_object_get_ex(ctx, "task", &task_obj))
+	return -1;
+    if (json_object_object_length(ctx) != 1
+	|| !json_object_is_type(task_obj, json_type_array))
+	return -1;
+
+    /* iterate the inner "task" array */
+    for (res = 0, i = 0; !res && i < json_object_array_length(task_obj); i++) {
+	task = parse_task(json_object_array_get_idx(task_obj, i), what);
+	res = (task)? 0 : -1;
+	if (!res)
+	    (* task_add)(p, task);
+    }
+
+    if (res)
+	lmap_wrn("invalid task in task array");
+    return res;
+}
+
+/* lmap-control :: lmap :: tasks */
+
+static int
+xx_lctrlt_add_task(void *p, struct task *task)
+{ struct lmap *lmap = p; return lmap_add_task(lmap, task); }
+
+/* note the special handling of "what" for parse_task() */
+static int
+xx_lctrl_tasks(void *p, json_object *ctx, int what)
+{ return parse_tasks(p, ctx, what & ~PARSE_CONFIG_FALSE, &xx_lctrlt_add_task); }
+
+/* lmap-control :: lmap :: capabilities */
+
+static int
+xx_lcapt_add_task(void *p, struct task *task)
+{ struct capability *cap = p; return lmap_capability_add_task(cap, task); }
+
+/* note the special handling of "what" for parse_task() */
+static int
+xx_lcap_tasks(void *p, json_object *ctx, int what)
+{ return parse_tasks(p, ctx, what & ~PARSE_CONFIG_TRUE, &xx_lcapt_add_task); }
+
+static int
+xx_lcap_version(void *p, const char *s)
+{ struct capability *capability = p; return lmap_capability_set_version(capability, s); }
+
+static int
+xx_lcap_tag(void *p, const char *s)
+{ struct capability *capability = p; return lmap_capability_add_tag(capability, s); }
+
+static int
+xx_lctrl_capabilities(void *p, json_object *ctx, int what)
+{
+    struct lmap *lmap = p;
+    int res = -1;
+
+    const struct lmap_jsonmap tab[] = {
+	JSONMAP_ENTRY_STRING(version, YANG_CONFIG_FALSE, xx_lcap),
+	JSONMAP_ENTRY_STRARRAY(tag,   YANG_CONFIG_FALSE, xx_lcap),
+	JSONMAP_ENTRY_OBJECT(tasks,   YANG_CONFIG_FALSE, xx_lcap),
+	{ .name = NULL }
+    };
+
+    if (!ctx || !json_object_is_type(ctx, json_type_object))
+	return -1;
+
+    if (!lmap->capabilities) {
+	if (!(lmap->capabilities = lmap_capability_new()))
+	    return -1;
+    }
+
+    json_object_object_foreach(ctx, key, jo) {
+	res = lookup_jsonmap(lmap->capabilities, what, key, jo, tab);
+	if (res)
+	    break;
+    }
+
+    return res;
+}
+
+/* lmap-control :: lmap :: agent */
+
+static int xx_lcas_agent_id(void *p, const char *s)
+{ struct agent *agent = p; return lmap_agent_set_agent_id(agent, s); }
+
+static int xx_lcas_group_id(void *p, const char *s)
+{ struct agent *agent = p; return lmap_agent_set_group_id(agent, s); }
+
+static int xx_lcas_measurement_point(void *p, const char *s)
+{ struct agent *agent = p; return lmap_agent_set_measurement_point(agent, s); }
+
+static int xx_lcas_report_agent_id(void *p, const char *s)
+{ struct agent *agent = p; return lmap_agent_set_report_agent_id(agent, s); }
+
+static int xx_lcas_report_group_id(void *p, const char *s)
+{ struct agent *agent = p; return lmap_agent_set_report_group_id(agent, s); }
+
+static int xx_lcas_report_measurement_point(void *p, const char *s)
+{ struct agent *agent = p; return lmap_agent_set_report_measurement_point(agent, s); }
+
+static int xx_lcas_controller_timeout(void *p, const char *s)
+{ struct agent *agent = p; return lmap_agent_set_controller_timeout(agent, s); }
+
+static int xx_lcas_last_started(void *p, const char *s)
+{ struct agent *agent = p; return lmap_agent_set_last_started(agent, s); }
+
+static int
+xx_lctrl_agent(void *p, json_object *ctx, int what)
+{
+    struct lmap *lmap = p;
+    int res = -1;
+
+    const struct lmap_jsonmap tab[] = {
+	JSONMAP_ENTRY_STRING_X(agent-id,            YANG_CONFIG_TRUE, xx_lcas_agent_id),
+	JSONMAP_ENTRY_STRING_X(group-id,            YANG_CONFIG_TRUE, xx_lcas_group_id),
+	JSONMAP_ENTRY_STRING_X(measurement-point,   YANG_CONFIG_TRUE, xx_lcas_measurement_point),
+	JSONMAP_ENTRY_BOOL2STR_X(report-agent-id,   YANG_CONFIG_TRUE, xx_lcas_report_agent_id),
+	JSONMAP_ENTRY_BOOL2STR_X(report-group-id,   YANG_CONFIG_TRUE, xx_lcas_report_group_id),
+	JSONMAP_ENTRY_BOOL2STR_X(report-measurement-point, YANG_CONFIG_TRUE, xx_lcas_report_measurement_point),
+	JSONMAP_ENTRY_INT2STR_X(controller-timeout, YANG_CONFIG_TRUE, xx_lcas_controller_timeout),
+	JSONMAP_ENTRY_STRING_X(last-started,        YANG_CONFIG_FALSE, xx_lcas_last_started),
+	{ .name = NULL }
+    };
+
+    if (!lmap->agent) {
+	if (!(lmap->agent = lmap_agent_new()))
+	    return -1;
+    }
+
+    json_object_object_foreach(ctx, key, jo) {
+	res = lookup_jsonmap(lmap->agent, what, key, jo, tab);
+	if (res)
+	    break;
+    }
+
+    return res;
+}
+
+/* lmap-control :: lmap :: events */
+
+static int xx_lce_interval(void *p, const char *s)
+{ struct event *event = p; return lmap_event_set_interval(event, s); }
+
+static int xx_lce_start(void *p, const char *s)
+{ struct event *event = p; return lmap_event_set_start(event, s); }
+
+static int xx_lce_end(void *p, const char *s)
+{ struct event *event = p; return lmap_event_set_end(event, s); }
+
+static int xx_lcec_month(void *p, const char *s)
+{ struct event *event = p; return lmap_event_add_month(event, s); }
+
+static int xx_lcec_day_of_month(void *p, json_object *jo, int unused)
+{
+    struct event *event = p; UNUSED(unused);
+    return lmap_event_add_day_of_month(event, json_object_get_string(jo));
+}
+
+static int xx_lcec_day_of_week(void *p, json_object *jo, int unused)
+{
+    struct event *event = p; UNUSED(unused);
+    return lmap_event_add_day_of_week(event, json_object_get_string(jo));
+}
+
+static int xx_lcec_hour(void *p, json_object *jo, int unused)
+{
+    struct event *event = p; UNUSED(unused);
+    return lmap_event_add_hour(event, json_object_get_string(jo));
+}
+
+static int xx_lcec_minute(void *p, json_object *jo, int unused)
+{
+    struct event *event = p; UNUSED(unused);
+    return lmap_event_add_minute(event, json_object_get_string(jo));
+}
+
+static int xx_lcec_second(void *p, json_object *jo, int unused)
+{
+    struct event *event = p; UNUSED(unused);
+    return lmap_event_add_second(event, json_object_get_string(jo));
+}
+
+static int xx_lcec_timezone_offset(void *p, const char *s)
+{ struct event *event = p; return lmap_event_set_timezone_offset(event, s); }
+
+static int
+xx_lcee(void *p, json_object *ctx, int what,
+        char* type, const struct lmap_jsonmap *tab)
+{
+    struct event *event = p;
+    int res = -1;
+
+    if (!event || !ctx)
+	return -1;
+
+    json_object_object_foreach(ctx, ctxkey, jo) {
+	res = lookup_jsonmap(event, what, ctxkey, jo, tab);
+	if (res)
+	    break;
+    }
+
+    if (!res)
+	lmap_event_set_type(event, type);
+
+    return res;
+}
+
+static int
+xx_lcee_periodic(void *p, json_object *ctx, int what)
+{
+    const struct lmap_jsonmap tab[] = {
+	JSONMAP_ENTRY_INT2STR(interval, YANG_CONFIG_TRUE, xx_lce),
+	JSONMAP_ENTRY_STRING(start,     YANG_CONFIG_TRUE, xx_lce),
+	JSONMAP_ENTRY_STRING(end,       YANG_CONFIG_TRUE, xx_lce),
+	{ .name = NULL }
+    };
+
+    return xx_lcee(p, ctx, what, "periodic", tab);
+}
+
+static int
+xx_lcee_calendar(void *p, json_object *ctx, int what)
+{
+    const struct lmap_jsonmap tab[] = {
+	JSONMAP_ENTRY_STRARRAY(month,          YANG_CONFIG_TRUE, xx_lcec),
+	JSONMAP_ENTRY_OBJARRAY_X(day-of-month, YANG_CONFIG_TRUE, xx_lcec_day_of_month),
+	JSONMAP_ENTRY_OBJARRAY_X(day-of-week,  YANG_CONFIG_TRUE, xx_lcec_day_of_week),
+	JSONMAP_ENTRY_OBJARRAY(hour,           YANG_CONFIG_TRUE, xx_lcec),
+	JSONMAP_ENTRY_OBJARRAY(minute,         YANG_CONFIG_TRUE, xx_lcec),
+	JSONMAP_ENTRY_OBJARRAY(second,         YANG_CONFIG_TRUE, xx_lcec),
+	JSONMAP_ENTRY_STRING_X(timezone-offset,YANG_CONFIG_TRUE, xx_lcec_timezone_offset),
+	JSONMAP_ENTRY_STRING(start,            YANG_CONFIG_TRUE, xx_lce),
+	JSONMAP_ENTRY_STRING(end,              YANG_CONFIG_TRUE, xx_lce),
+	{ .name = NULL }
+    };
+
+    return xx_lcee(p, ctx, what, "calendar", tab);
+}
+
+static int
+xx_lcee_one_off(void *p, json_object *ctx, int what)
+{
+    const struct lmap_jsonmap tab[] = {
+	JSONMAP_ENTRY_STRING_X(time, YANG_CONFIG_TRUE, xx_lce_start),
+	{ .name = NULL }
+    };
+
+    return xx_lcee(p, ctx, what, "one-off", tab);
+}
+
+static int
+xx_lceez(void *p, json_object *ctx, char *type)
+{
+    struct event *event = p;
+
+    if (!event || !ctx)
+	return -1;
+    if (!lmap_json_object_is_empty(ctx)) {
+	lmap_wrn("invalid event of type %s: not empty", type);
+	return -1;
+    }
+
+    return lmap_event_set_type(event, type);
+}
+
+static int xx_lceez_immediate(void *p, json_object *ctx, int unused)
+{ UNUSED(unused); return xx_lceez(p, ctx, "immediate"); }
+
+static int xx_lceez_startup(void *p, json_object *ctx, int unused)
+{ UNUSED(unused); return xx_lceez(p, ctx, "startup"); }
+
+static int xx_lceez_controller_lost(void *p, json_object *ctx, int unused)
+{ UNUSED(unused); return xx_lceez(p, ctx, "controller-lost"); }
+
+static int xx_lceez_controller_connected(void *p, json_object *ctx, int unused)
+{ UNUSED(unused); return xx_lceez(p, ctx, "controller-connected"); }
+
+static int xx_lce_name(void *p, const char *s)
+{ struct event *event = p; return lmap_event_set_name(event, s); }
+
+static int xx_lce_random_spread(void *p, const char *s)
+{ struct event *event = p; return lmap_event_set_random_spread(event, s); }
+
+static int xx_lce_cycle_interval(void *p, const char *s)
+{ struct event *event = p; return lmap_event_set_cycle_interval(event, s); }
+
+static struct event *
+parse_event(json_object *ctx, int what)
+{
+    struct event *event;
+    int res = -1;
+
+    const struct lmap_jsonmap tab[] = {
+	JSONMAP_ENTRY_STRING(name, YANG_KEY, xx_lce),
+	JSONMAP_ENTRY_INT2STR_X(random-spread,  YANG_CONFIG_TRUE, xx_lce_random_spread),
+	JSONMAP_ENTRY_INT2STR_X(cycle-interval, YANG_CONFIG_TRUE, xx_lce_cycle_interval),
+	JSONMAP_ENTRY_OBJECT(periodic,  YANG_CONFIG_TRUE, xx_lcee),
+	JSONMAP_ENTRY_OBJECT(calendar,  YANG_CONFIG_TRUE, xx_lcee),
+	JSONMAP_ENTRY_OBJECT_X(one-off, YANG_CONFIG_TRUE, xx_lcee_one_off),
+	JSONMAP_ENTRY_OBJANY(immediate, YANG_CONFIG_TRUE, xx_lceez),
+	JSONMAP_ENTRY_OBJANY(startup,   YANG_CONFIG_TRUE, xx_lceez),
+	JSONMAP_ENTRY_OBJANY_X(controller-lost,      YANG_CONFIG_TRUE, xx_lceez_controller_lost),
+	JSONMAP_ENTRY_OBJANY_X(controller-connected, YANG_CONFIG_TRUE, xx_lceez_controller_connected),
+	{ .name = NULL }
+    };
+
+    if (!ctx || !json_object_is_type(ctx, json_type_object))
+	return NULL;
+
+    event = lmap_event_new();
+    if (!event)
+	return NULL;
+
+    json_object_object_foreach(ctx, key, jo) {
+	res = lookup_jsonmap(event, what, key, jo, tab);
+	if (res)
+	    break;
+    }
+
+    if (res) {
+	lmap_event_free(event);
+	event = NULL;
+    }
+
+    return event;
+}
+
+static int
+xx_lctrl_events(void *p, json_object *ctx, int what)
+{
+    json_object *event_obj = NULL;
+    struct lmap *lmap = p;
+    struct event *event;
+    int res, i;
+
+    /* ctx must be an object with a single field "event", which is an array */
+    if (!ctx)
+	return -1;
+    if (!json_object_object_get_ex(ctx, "event", &event_obj))
+	return -1;
+    if (json_object_object_length(ctx) != 1
+	|| !json_object_is_type(event_obj, json_type_array))
+	return -1;
+
+    /* iterate the inner "event" array */
+    for (res = 0, i = 0; !res && i < json_object_array_length(event_obj); i++) {
+	event = parse_event(json_object_array_get_idx(event_obj, i), what);
+	res = (event)? 0 : -1;
+	if (!res)
+	    lmap_add_event(lmap, event);
+    }
+
+    if (res)
+	lmap_wrn("invalid event in events array");
+
+    return res;
+}
+
+/* lmap-control :: lmap :: suppressions */
+
+static int xx_lcsp_name(void *p, const char *s)
+{ struct supp *supp = p; return lmap_supp_set_name(supp, s); }
+
+static int xx_lcsp_start(void *p, const char *s)
+{ struct supp *supp = p; return lmap_supp_set_start(supp, s); }
+
+static int xx_lcsp_end(void *p, const char *s)
+{ struct supp *supp = p; return lmap_supp_set_end(supp, s); }
+
+static int xx_lcsp_match(void *p, const char *s)
+{ struct supp *supp = p; return lmap_supp_add_match(supp, s); }
+
+static int xx_lcsp_stop_running(void *p, const char *s)
+{ struct supp *supp = p; return lmap_supp_set_stop_running(supp, s); }
+
+static int xx_lcsp_state(void *p, const char *s)
+{ struct supp *supp = p; return lmap_supp_set_state(supp, s); }
+
+static struct supp *
+parse_suppression(json_object *ctx, int what)
+{
+    struct supp *supp;
+    int res = -1;
+
+    const struct lmap_jsonmap tab[] = {
+	JSONMAP_ENTRY_STRING(name,    YANG_KEY, xx_lcsp),
+	JSONMAP_ENTRY_STRING(start,   YANG_CONFIG_TRUE, xx_lcsp),
+	JSONMAP_ENTRY_STRING(end,     YANG_CONFIG_TRUE, xx_lcsp),
+	JSONMAP_ENTRY_STRARRAY(match, YANG_CONFIG_TRUE, xx_lcsp),
+	JSONMAP_ENTRY_BOOL2STR_X(stop-running, YANG_CONFIG_TRUE, xx_lcsp_stop_running),
+	JSONMAP_ENTRY_STRING(state,   YANG_CONFIG_FALSE, xx_lcsp),
+	{ .name = NULL }
+    };
+
+    if (!ctx || !json_object_is_type(ctx, json_type_object))
+	return NULL;
+
+    supp = lmap_supp_new();
+    if (!supp)
+	return NULL;
+
+    json_object_object_foreach(ctx, key, jo) {
+	res = lookup_jsonmap(supp, what, key, jo, tab);
+	if (res)
+	    break;
+    }
+
+    if (res) {
+	lmap_supp_free(supp);
+	supp = NULL;
+    }
+
+    return supp;
+}
+
+static int
+xx_lctrl_suppressions(void *p, json_object *ctx, int what)
+{
+    json_object *supp_obj = NULL;
+    struct lmap *lmap = p;
+    struct supp *supp;
+    int res, i;
+
+    /* ctx must be an object with a single field "suppression", which is an array */
+    if (!ctx)
+	return -1;
+    if (!json_object_object_get_ex(ctx, "suppression", &supp_obj))
+	return -1;
+    if (json_object_object_length(ctx) != 1
+	|| !json_object_is_type(supp_obj, json_type_array))
+	return -1;
+
+    /* iterate the inner "suppression" array */
+    for (res = 0, i = 0; !res && i < json_object_array_length(supp_obj); i++) {
+	supp = parse_suppression(json_object_array_get_idx(supp_obj, i), what);
+	res = (supp)? 0 : -1;
+	if (!res)
+	    lmap_add_supp(lmap, supp);
+    }
+
+    if (res)
+	lmap_wrn("invalid suppression in suppresions array");
+
+    return res;
+}
+
+/* lmap-control :: lmap :: schedules :: action */
+
+static int xx_lact_name(void *p, const char *s)
+{ struct action *action = p; return lmap_action_set_name(action, s); }
+
+static int xx_lact_task(void *p, const char *s)
+{ struct action *action = p; return lmap_action_set_task(action, s); }
+
+/* ctx is an array member of "action.option" or NULL */
+static int xx_lact_option(void *p, json_object *ctx, int what)
+{
+    struct action *action = p;
+    struct option *option;
+    int res = -1;
+
+    option = parse_option(ctx, what);
+    if (option)
+	res = lmap_action_add_option(action, option);
+
+    return res;
+}
+
+static int xx_lact_destination(void *p, const char *s)
+{ struct action *action = p; return lmap_action_add_destination(action, s); }
+
+static int xx_lact_tag(void *p, const char *s)
+{ struct action *action = p; return lmap_action_add_tag(action, s); }
+
+static int xx_lact_supp_tag(void *p, const char *s)
+{ struct action *action = p; return lmap_action_add_suppression_tag(action, s); }
+
+static int xx_lact_state(void *p, const char *s)
+{ struct action *action = p; return lmap_action_set_state(action, s); }
+
+static int xx_lact_storage(void *p, const char *s)
+{ struct action *action = p; return lmap_action_set_storage(action, s); }
+
+static int xx_lact_invocations(void *p, const char *s)
+{ struct action *sch = p; return lmap_action_set_invocations(sch, s); }
+
+static int xx_lact_suppressions(void *p, const char *s)
+{ struct action *sch = p; return lmap_action_set_suppressions(sch, s); }
+
+static int xx_lact_overlaps(void *p, const char *s)
+{ struct action *sch = p; return lmap_action_set_overlaps(sch, s); }
+
+static int xx_lact_failures(void *p, const char *s)
+{ struct action *sch = p; return lmap_action_set_failures(sch, s); }
+
+static int xx_lact_last_invocation(void *p, const char *s)
+{ struct action *sch = p; return lmap_action_set_last_invocation(sch, s); }
+
+static int xx_lact_last_completion(void *p, const char *s)
+{ struct action *sch = p; return lmap_action_set_last_completion(sch, s); }
+
+static int xx_lact_last_status(void *p, const char *s)
+{ struct action *action = p; return lmap_action_set_last_status(action, s); }
+
+static int xx_lact_last_message(void *p, const char *s)
+{ struct action *action = p; return lmap_action_set_last_message(action, s); }
+
+static int xx_lact_last_failed_completion(void *p, const char *s)
+{ struct action *sch = p; return lmap_action_set_last_failed_completion(sch, s); }
+
+static int xx_lact_last_failed_status(void *p, const char *s)
+{ struct action *action = p; return lmap_action_set_last_failed_status(action, s); }
+
+static int xx_lact_last_failed_message(void *p, const char *s)
+{ struct action *action = p; return lmap_action_set_last_failed_message(action, s); }
+
+static struct action *
+parse_action(json_object *ctx, int what)
+{
+    struct action *action;
+    int res = -1;
+
+    const struct lmap_jsonmap tab[] = {
+	JSONMAP_ENTRY_STRING(name,                YANG_KEY,          xx_lact),
+	JSONMAP_ENTRY_STRING(task,                YANG_CONFIG_TRUE,  xx_lact),
+	JSONMAP_ENTRY_OBJARRAY(option,            YANG_CONFIG_TRUE,  xx_lact),
+	JSONMAP_ENTRY_STRARRAY(destination,       YANG_CONFIG_TRUE,  xx_lact),
+	JSONMAP_ENTRY_STRARRAY(tag,               YANG_CONFIG_TRUE,  xx_lact),
+	JSONMAP_ENTRY_STRARRAY_X(suppression-tag, YANG_CONFIG_TRUE,  xx_lact_supp_tag),
+	JSONMAP_ENTRY_STRING(state,               YANG_CONFIG_FALSE, xx_lact),
+	JSONMAP_ENTRY_STRING(storage,             YANG_CONFIG_FALSE, xx_lact),
+	JSONMAP_ENTRY_INT2STR(invocations,        YANG_CONFIG_FALSE, xx_lact),
+	JSONMAP_ENTRY_INT2STR(suppressions,       YANG_CONFIG_FALSE, xx_lact),
+	JSONMAP_ENTRY_INT2STR(overlaps,           YANG_CONFIG_FALSE, xx_lact),
+	JSONMAP_ENTRY_INT2STR(failures,           YANG_CONFIG_FALSE, xx_lact),
+	JSONMAP_ENTRY_STRING_X(last-invocation,   YANG_CONFIG_FALSE, xx_lact_last_invocation),
+	JSONMAP_ENTRY_STRING_X(last-completion,   YANG_CONFIG_FALSE, xx_lact_last_completion),
+	JSONMAP_ENTRY_INT2STR_X(last-status,      YANG_CONFIG_FALSE, xx_lact_last_status),
+	JSONMAP_ENTRY_STRING_X(last-message,      YANG_CONFIG_FALSE, xx_lact_last_message),
+	JSONMAP_ENTRY_STRING_X(last-failed-completion, YANG_CONFIG_FALSE, xx_lact_last_failed_completion),
+	JSONMAP_ENTRY_INT2STR_X(last-failed-status,    YANG_CONFIG_FALSE, xx_lact_last_failed_status),
+	JSONMAP_ENTRY_STRING_X(last-failed-message,    YANG_CONFIG_FALSE, xx_lact_last_failed_message),
+	{ .name = NULL }
+    };
+
+    if (!ctx)
+	return NULL;
+
+    action = lmap_action_new();
+    if (!action)
+	return NULL;
+
+    if (json_object_is_type(ctx, json_type_object)) {
+	json_object_object_foreach(ctx, key, jo) {
+	    res = lookup_jsonmap(action, what, key, jo, tab);
+	    if (res)
+		break;
+	}
+    }
+
+    if (res) {
+	lmap_wrn("invalid action in actions array");
+	lmap_action_free(action);
+	action = NULL;
+    }
+
+    return action;
+}
+
+/* ctx is an array item or NULL */
+static int
+xx_lsch_action(void *p, json_object *ctx, int what)
+{
+    struct schedule *sch = p;
+    struct action *action;
+    int res = -1;
+
+    action = parse_action(ctx, what);
+    if (action)
+	res = lmap_schedule_add_action(sch, action);
+
+    return res;
+}
+
+/* lmap-control :: lmap :: schedules */
+
+static int xx_lsch_name(void *p, const char *s)
+{ struct schedule *sch = p; return lmap_schedule_set_name(sch, s); }
+
+static int xx_lsch_start(void *p, const char *s)
+{ struct schedule *sch = p; return lmap_schedule_set_start(sch, s); }
+
+static int xx_lsch_end(void *p, const char *s)
+{ struct schedule *sch = p; return lmap_schedule_set_end(sch, s); }
+
+static int xx_lsch_duration(void *p, const char *s)
+{ struct schedule *sch = p; return lmap_schedule_set_duration(sch, s); }
+
+static int xx_lsch_exec_mode(void *p, const char *s)
+{ struct schedule *sch = p; return lmap_schedule_set_exec_mode(sch, s); }
+
+static int xx_lsch_tag(void *p, const char *s)
+{ struct schedule *sch = p; return lmap_schedule_add_tag(sch, s); }
+
+static int xx_lsch_supp_tag(void *p, const char *s)
+{ struct schedule *sch = p; return lmap_schedule_add_suppression_tag(sch, s); }
+
+static int xx_lsch_state(void *p, const char *s)
+{ struct schedule *sch = p; return lmap_schedule_set_state(sch, s); }
+
+static int xx_lsch_storage(void *p, const char *s)
+{ struct schedule *sch = p; return lmap_schedule_set_storage(sch, s); }
+
+static int xx_lsch_invocations(void *p, const char *s)
+{ struct schedule *sch = p; return lmap_schedule_set_invocations(sch, s); }
+
+static int xx_lsch_suppressions(void *p, const char *s)
+{ struct schedule *sch = p; return lmap_schedule_set_suppressions(sch, s); }
+
+static int xx_lsch_overlaps(void *p, const char *s)
+{ struct schedule *sch = p; return lmap_schedule_set_overlaps(sch, s); }
+
+static int xx_lsch_failures(void *p, const char *s)
+{ struct schedule *sch = p; return lmap_schedule_set_failures(sch, s); }
+
+static int xx_lsch_last_invocation(void *p, const char *s)
+{ struct schedule *sch = p; return lmap_schedule_set_last_invocation(sch, s); }
+
+static struct schedule*
+parse_schedule(json_object *ctx, int what)
+{
+    struct schedule *schedule;
+    int res = -1;
+
+    const struct lmap_jsonmap tab[] = {
+	JSONMAP_ENTRY_STRING(name,     YANG_KEY, xx_lsch),
+	JSONMAP_ENTRY_STRING(start,    YANG_CONFIG_TRUE, xx_lsch),
+	JSONMAP_ENTRY_STRING(end,      YANG_CONFIG_TRUE, xx_lsch),
+	JSONMAP_ENTRY_STRING(duration, YANG_CONFIG_TRUE, xx_lsch),
+	JSONMAP_ENTRY_STRING_X(execution-mode,    YANG_CONFIG_TRUE, xx_lsch_exec_mode),
+	JSONMAP_ENTRY_STRARRAY_X(tag,             YANG_CONFIG_TRUE, xx_lsch_tag),
+	JSONMAP_ENTRY_STRARRAY_X(suppression-tag, YANG_CONFIG_TRUE, xx_lsch_supp_tag),
+	JSONMAP_ENTRY_OBJARRAY_X(action,          YANG_CONFIG_TRUE, xx_lsch_action),
+	JSONMAP_ENTRY_STRING(state,               YANG_CONFIG_FALSE, xx_lsch),
+	JSONMAP_ENTRY_STRING(storage,             YANG_CONFIG_FALSE, xx_lsch),
+	JSONMAP_ENTRY_INT2STR(invocations,        YANG_CONFIG_FALSE, xx_lsch),
+	JSONMAP_ENTRY_INT2STR(suppressions,       YANG_CONFIG_FALSE, xx_lsch),
+	JSONMAP_ENTRY_INT2STR(overlaps,           YANG_CONFIG_FALSE, xx_lsch),
+	JSONMAP_ENTRY_INT2STR(failures,           YANG_CONFIG_FALSE, xx_lsch),
+	JSONMAP_ENTRY_STRING_X(last-invocation,   YANG_CONFIG_FALSE, xx_lsch_last_invocation),
+	{ .name = NULL }
+    };
+
+    if (!ctx || !json_object_is_type(ctx, json_type_object))
+	return NULL;
+
+    schedule = lmap_schedule_new();
+    if (!schedule)
+	return NULL;
+
+    json_object_object_foreach(ctx, key, jo) {
+	res = lookup_jsonmap(schedule, what, key, jo, tab);
+	if (res)
+	    break;
+    }
+
+    if (res) {
+	lmap_schedule_free(schedule);
+	schedule = NULL;
+    }
+
+    return schedule;
+}
+
+static int
+xx_lctrl_schedules(void *p, json_object *ctx, int what)
+{
+    json_object *schedule_obj = NULL;
+    struct lmap *lmap = p;
+    struct schedule *schedule;
+    int res, i;
+
+    /* ctx must be an object with a single field "schedule", which is an array */
+    if (!ctx)
+	return -1;
+    if (!json_object_object_get_ex(ctx, "schedule", &schedule_obj))
+	return -1;
+    if (json_object_object_length(ctx) != 1
+	|| !json_object_is_type(schedule_obj, json_type_array))
+	return -1;
+
+    /* iterate the inner "schedule" array */
+    for (res = 0, i = 0; !res && i < json_object_array_length(schedule_obj); i++) {
+	schedule = parse_schedule(json_object_array_get_idx(schedule_obj, i), what);
+	res = (schedule)? 0 : -1;
+	if (!res)
+	    lmap_add_schedule(lmap, schedule);
+    }
+
+    if (res)
+	lmap_wrn("invalid schedule in schedules array");
+
+    return res;
+}
+
+/* lmap-control :: lmap */
+
+/*
+ * what:  PARSER_CONFIG_TRUE when parsing config files,
+ *        hardcoded capabilities and state
+ *
+ *        PARSER_CONFIG_FALSE when parsing hardcoded
+ *        capabilities and state
+ */
+static int
+parse_control_doc(struct lmap *lmap, json_object *root, int what)
+{
+    json_object *control_obj = NULL;
+    int res = -1;
+
+    const struct lmap_jsonmap tab[] = {
+	JSONMAP_ENTRY_OBJECT(capabilities, YANG_CONFIG_FALSE, xx_lctrl),
+	JSONMAP_ENTRY_OBJECT(agent,        0, xx_lctrl),
+	JSONMAP_ENTRY_OBJECT(tasks,        0, xx_lctrl),
+	JSONMAP_ENTRY_OBJECT(schedules,    0, xx_lctrl),
+	JSONMAP_ENTRY_OBJECT(suppressions, 0, xx_lctrl),
+	JSONMAP_ENTRY_OBJECT(events,       0, xx_lctrl),
+	{ .name = NULL }
+    };
+
+    if (!root)
+	goto err_exit;
+
+    /* must be an object with a single field "lmap", which is
+     * also an object */
+    if (!json_object_object_get_ex(root, "ietf-lmap-control:lmap", &control_obj)
+	 && !json_object_object_get_ex(root, "lmap", &control_obj))
+	goto err_exit;
+    if (json_object_object_length(root) != 1
+	|| !json_object_is_type(control_obj, json_type_object))
+	goto err_exit;
+
+    /* iterate the inner "control" object */
+    json_object_object_foreach(control_obj, ctxkey, jo) {
+	res = lookup_jsonmap(lmap, what, ctxkey, jo, tab);
+	if (res)
+	    break;
+    }
+
+err_exit:
+    if (res)
+	lmap_err("could not read config/state data");
+
+    return res;
 }
 
 static int
