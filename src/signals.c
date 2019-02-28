@@ -25,7 +25,7 @@
 #include "lmap.h"
 #include "lmapd.h"
 #include "utils.h"
-#include "xml-io.h"
+#include "lmap-io.h"
 #include "runner.h"
 #include "signals.h"
 #include "workspace.h"
@@ -142,8 +142,9 @@ void
 lmapd_sigusr1_cb(evutil_socket_t sig, short events, void *context)
 {
     FILE *f = NULL;
-    char *xml = NULL;
+    char *doc = NULL;
     char filename[PATH_MAX];
+    const char *ext;
     struct lmapd *lmapd = (struct lmapd *) context;
 
     (void) sig;
@@ -153,21 +154,22 @@ lmapd_sigusr1_cb(evutil_socket_t sig, short events, void *context)
     assert(lmapd->run_path);
 
     lmapd_workspace_update(lmapd);
-    xml = lmap_xml_render_state(lmapd->lmap);
-    if (! xml) {
+    doc = lmap_io_render_state(lmapd->lmap);
+    if (! doc) {
 	lmap_err("failed to render lmap state");
 	return;
     }
 
+    ext = lmap_io_engine_ext();
     snprintf(filename, sizeof(filename),
-	     "%s/%s", lmapd->run_path, LMAPD_STATUS_FILE);
+	     "%s/%s%s", lmapd->run_path, LMAPD_STATUS_FILE, ext);
     f = fopen(filename, "w");
     if (! f) {
 	lmap_err("failed to open '%s': %s", filename, strerror(errno));
 	goto done;
     }
 
-    if (fputs(xml, f) == EOF || fflush(f) == EOF) {
+    if (fputs(doc, f) == EOF || fflush(f) == EOF) {
 	lmap_err("failed to write to '%s'", filename);
 	goto done;
     }
@@ -176,8 +178,8 @@ done:
     if (f) {
 	(void) fclose(f);
     }
-    if (xml) {
-	free(xml);
+    if (doc) {
+	free(doc);
     }
 }
 

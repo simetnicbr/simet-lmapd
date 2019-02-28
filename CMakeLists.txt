@@ -5,6 +5,8 @@ project(lmapd VERSION 0.4.0 LANGUAGES C)
 
 option(BUILD_SHARED_LIBS "Build the shared library" OFF)
 option(BUILD_TESTS "Build test programs" ON)
+option(BUILD_JSON  "Build with JSON support (requires json-c)" ON)
+option(BUILD_XML   "Build with XML support (requires libxml2)" ON)
 
 # experimental code coverage stuff...
 #set(CMAKE_CXX_FLAGS "-g -O0 -Wall -fprofile-arcs -ftest-coverage")
@@ -14,8 +16,15 @@ option(BUILD_TESTS "Build test programs" ON)
 find_package(Threads)
 find_package(PkgConfig)
 pkg_check_modules(LIBEVENT REQUIRED libevent)
-pkg_check_modules(LIBXML2 REQUIRED libxml-2.0)
-pkg_check_modules(LIBJSONC REQUIRED json-c)
+
+if(BUILD_XML)
+    pkg_check_modules(LIBXML2 REQUIRED libxml-2.0)
+    add_definitions(-DWITH_XML)
+endif(BUILD_XML)
+if(BUILD_JSON)
+    pkg_check_modules(LIBJSONC REQUIRED json-c)
+    add_definitions(-DWITH_JSON)
+endif(BUILD_JSON)
 
 if(CMAKE_COMPILER_IS_GNUCC)
     add_definitions(-Wall)
@@ -25,12 +34,12 @@ add_subdirectory(doc)
 add_subdirectory(src)
 
 # testing related definitions
-if(BUILD_TESTS)
+if(BUILD_TESTS AND BUILD_XML)
     add_subdirectory(test)
     enable_testing()
     add_test(NAME lmap COMMAND check-lmap)
     add_test(NAME lmapd COMMAND check-lmapd)
-endif(BUILD_TESTS)
+endif(BUILD_TESTS AND BUILD_XML)
 
 # source packages 'make package_source' or 'make dist'
 set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})

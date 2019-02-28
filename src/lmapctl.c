@@ -36,8 +36,7 @@
 #include "lmapd.h"
 #include "utils.h"
 #include "pidfile.h"
-#include "xml-io.h"
-#include "json-io.h"
+#include "lmap-io.h"
 #include "runner.h"
 #include "workspace.h"
 
@@ -73,10 +72,6 @@ static struct
 
 static struct lmapd *lmapd = NULL;
 
-#define LMAP_FORMAT_XML		0x01
-#define LMAP_FORMAT_JSON	0x02
-static int format = LMAP_FORMAT_XML;
-
 static void
 atexit_cb(void)
 {
@@ -98,14 +93,18 @@ vlog(int level, const char *func, const char *format, va_list args)
 static void
 usage(FILE *f)
 {
-    fprintf(f, "usage: %s [-h] [-q queue] [-c config] [-C dir] [-s status]\n"
+    fprintf(f, "usage: %s [-h] [-j|-x] [-q queue] [-c config] [-C dir] [-s status]\n"
 	    "\t-q path to queue directory\n"
 	    "\t-c path to config directory or file\n"
 	    "\t-r path to run directory (pid file and status file)\n"
 	    "\t-C path in which the program is executed\n"
-	    "\t-h show brief usage information and exit\n"
+#ifdef WITH_JSON
 	    "\t-j use json format when generating output\n"
-	    "\t-x use xml format when generating output (default)\n",
+#endif
+#ifdef WITH_XML
+	    "\t-x use xml format when generating output (default)\n"
+#endif
+	    "\t-h show brief usage information and exit\n",
 	    LMAPD_LMAPCTL);
 }
 
@@ -229,7 +228,7 @@ read_config(struct lmapd *lmapd)
 	return -1;
     }
 
-    if (lmap_xml_parse_config_path(lmapd->lmap, lmapd->config_path)) {
+    if (lmap_io_parse_config_path(lmapd->lmap, lmapd->config_path)) {
 	lmap_free(lmapd->lmap);
 	lmapd->lmap = NULL;
 	return -1;
@@ -252,16 +251,18 @@ static int
 read_state(struct lmapd *lmapd)
 {
     char statefile[PATH_MAX];
+    const char *ext;
 
-    snprintf(statefile, sizeof(statefile), "%s/%s",
-	     lmapd->run_path, LMAPD_STATUS_FILE);
+    ext = lmap_io_engine_ext();
+    snprintf(statefile, sizeof(statefile), "%s/%s%s",
+	     lmapd->run_path, LMAPD_STATUS_FILE, ext);
 
     lmapd->lmap = lmap_new();
     if (! lmapd->lmap) {
 	return -1;
     }
 
-    if (lmap_xml_parse_state_file(lmapd->lmap, statefile)) {
+    if (lmap_io_parse_state_file(lmapd->lmap, statefile)) {
 	lmap_free(lmapd->lmap);
 	lmapd->lmap = NULL;
 	return -1;
@@ -298,7 +299,7 @@ clean_cmd(int argc, char *argv[])
 static int
 config_cmd(int argc, char *argv[])
 {
-    char *xml;
+    char *doc;
 
     if (argc != 1) {
 	printf("%s: wrong # of args: should be '%s'\n",
@@ -313,12 +314,12 @@ config_cmd(int argc, char *argv[])
 	return 1;
     }
 
-    xml = lmap_xml_render_config(lmapd->lmap);
-    if (! xml) {
+    doc = lmap_io_render_config(lmapd->lmap);
+    if (! doc) {
 	return 1;
     }
-    fputs(xml, stdout);
-    free(xml);
+    fputs(doc, stdout);
+    free(doc);
     return 0;
 }
 
@@ -392,14 +393,7 @@ report_cmd(int argc, char *argv[])
 	return 1;
     }
 
-    switch (format) {
-    case LMAP_FORMAT_XML:
-	report = lmap_xml_render_report(lmapd->lmap);
-	break;
-    case LMAP_FORMAT_JSON:
-	report = lmap_json_render_report(lmapd->lmap);
-	break;
-    }
+    report = lmap_io_render_report(lmapd->lmap);
     if (! report) {
 	return 1;
     }
@@ -696,10 +690,16 @@ main(int argc, char *argv[])
 	    usage(stdout);
 	    exit(EXIT_SUCCESS);
 	case 'j':
-	    format = LMAP_FORMAT_JSON;
+	    if (lmap_io_set_engine(LMAP_IO_JSON)) {
+		lmap_err("JSON IO engine unavailable");
+		exit(EXIT_FAILURE);
+	    }
 	    break;
 	case 'x':
-	    format = LMAP_FORMAT_XML;
+	    if (lmap_io_set_engine(LMAP_IO_XML)) {
+		lmap_err("XML IO engine unavailable");
+		exit(EXIT_FAILURE);
+	    }
 	    break;
 	default:
 	    usage(stderr);

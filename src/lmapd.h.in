@@ -28,7 +28,7 @@
 #define LMAPD_QUEUE_DIR		"@CMAKE_INSTALL_PREFIX@/var/spool/lmapd/queue"
 #define LMAPD_RUN_DIR		"@CMAKE_INSTALL_PREFIX@/var/run"
 
-#define LMAPD_STATUS_FILE	"lmapd-state.xml"
+#define LMAPD_STATUS_FILE	"lmapd-state"
 #define LMAPD_PID_FILE		"lmapd.pid"
 
 #include <event2/event.h>

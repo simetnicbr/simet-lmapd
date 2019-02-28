@@ -29,7 +29,7 @@
 #include "lmapd.h"
 #include "utils.h"
 #include "pidfile.h"
-#include "xml-io.h"
+#include "lmap-io.h"
 #include "runner.h"
 #include "workspace.h"
 
@@ -50,7 +50,7 @@ atexit_cb(void)
 static void
 usage(FILE *f)
 {
-    fprintf(f, "usage: %s [-f] [-n] [-s] [-z] [-v] [-h] [-q queue] [-c config] [-s status]\n"
+    fprintf(f, "usage: %s [-j|-x] [-f] [-n] [-s] [-z] [-v] [-h] [-q queue] [-c config] [-s status]\n"
 	    "\t-f fork (daemonize)\n"
 	    "\t-n parse config and dump config and exit\n"
 	    "\t-s parse config and dump state and exit\n"
@@ -60,6 +60,12 @@ usage(FILE *f)
 	    "\t-b path to capability directory or file\n"
 	    "\t-r path to run directory (pid file and status file)\n"
 	    "\t-v show version information and exit\n"
+#ifdef WITH_JSON
+	    "\t-j use JSON for config and reports\n"
+#endif
+#ifdef WITH_XML
+	    "\t-x use XML for config and reports (default)\n"
+#endif
 	    "\t-h show brief usage information and exit\n",
 	    LMAPD_LMAPD);
 }
@@ -141,7 +147,7 @@ read_config(struct lmapd *lmapd)
 	return -1;
     }
 
-    ret = lmap_xml_parse_config_path(lmapd->lmap, lmapd->config_path);
+    ret = lmap_io_parse_config_path(lmapd->lmap, lmapd->config_path);
     if (ret != 0) {
 	lmap_free(lmapd->lmap);
 	lmapd->lmap = NULL;
@@ -152,7 +158,7 @@ read_config(struct lmapd *lmapd)
 	lmapd->lmap->agent->last_started = time(NULL);
     }
 
-    ret = lmap_xml_parse_state_path(lmapd->lmap, lmapd->capability_path);
+    ret = lmap_io_parse_state_path(lmapd->lmap, lmapd->capability_path);
     if (ret != 0) {
 	lmap_free(lmapd->lmap);
 	lmapd->lmap = NULL;
@@ -183,7 +189,7 @@ main(int argc, char *argv[])
     char *run_path = NULL;
     pid_t pid;
 
-    while ((opt = getopt(argc, argv, "fnszq:c:b:r:vh")) != -1) {
+    while ((opt = getopt(argc, argv, "fnszq:c:b:r:vhjx")) != -1) {
 	switch (opt) {
 	case 'f':
 	    daemon = 1;
@@ -216,6 +222,18 @@ main(int argc, char *argv[])
 	case 'h':
 	    usage(stdout);
 	    exit(EXIT_SUCCESS);
+	case 'j':
+	    if (lmap_io_set_engine(LMAP_IO_JSON)) {
+		lmap_err("JSON IO engine unavailable");
+		exit(EXIT_FAILURE);
+	    }
+	    break;
+	case 'x':
+	    if (lmap_io_set_engine(LMAP_IO_XML)) {
+		lmap_err("XML IO engine unavailable");
+		exit(EXIT_FAILURE);
+	    }
+	    break;
 	default:
 	    usage(stderr);
 	    exit(EXIT_FAILURE);
@@ -245,20 +263,20 @@ main(int argc, char *argv[])
 	}
 	valid = lmap_valid(lmapd->lmap);
 	if (valid && noop) {
-	    char *xml = lmap_xml_render_config(lmapd->lmap);
-	    if (! xml) {
+	    char *doc = lmap_io_render_config(lmapd->lmap);
+	    if (! doc) {
 		exit(EXIT_FAILURE);
 	    }
-	    fputs(xml, stdout);
-	    free(xml);
+	    fputs(doc, stdout);
+	    free(doc);
 	}
 	if (valid && state) {
-	    char *xml = lmap_xml_render_state(lmapd->lmap);
-	    if (! xml) {
+	    char *doc = lmap_io_render_state(lmapd->lmap);
+	    if (! doc) {
 		exit(EXIT_FAILURE);
 	    }
-	    fputs(xml, stdout);
-	    free(xml);
+	    fputs(doc, stdout);
+	    free(doc);
 	}
 	if (fflush(stdout) == EOF) {
 	    lmap_err("flushing stdout failed");
