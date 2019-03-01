@@ -798,19 +798,82 @@ lmap_json_parse_report_string(struct lmap *lmap, const char *string)
  */
 
 static void
+json_object_objarray_add(json_object *jobj,
+			const char *key,
+			json_object *val)
+{
+    if (jobj) {
+	if (json_object_is_type(jobj, json_type_object)) {
+	    json_object_object_add(jobj, key, val);
+	} else if (json_object_is_type(jobj, json_type_array)) {
+	    json_object_array_add(jobj, val);
+	} /* else "internal error!" */
+    }
+}
+
+static void
+render_empty_leaf(json_object *jobj, char *name)
+{
+    /* RFC7951 section 6.9 maps YANG empty to [null] */
+    json_object *ja = json_object_new_array();
+    if (ja) {
+	json_object_array_add(ja, NULL);
+	json_object_object_add(jobj, name, ja);
+    }
+}
+
+static void
 render_leaf(json_object *jobj, char *name, char *content)
 {
     assert(jobj);
 
     if (name && content) {
-	json_object_object_add(jobj, name, json_object_new_string(content));
+	json_object_objarray_add(jobj, name, json_object_new_string(content));
+    }
+}
+
+static void
+render_leaf_boolean(json_object *jobj, char *name, int content)
+{
+    assert(jobj);
+
+    if (name) {
+	json_object_objarray_add(jobj, name,
+		json_object_new_boolean(content ? (json_bool)1 : (json_bool)0));
     }
 }
 
 static void
 render_leaf_int32(json_object *jobj, char *name, int32_t value)
 {
-    json_object_object_add(jobj, name, json_object_new_int(value));
+    json_object_objarray_add(jobj, name, json_object_new_int(value));
+}
+
+static void
+render_leaf_uint32(json_object *jobj, char *name, uint32_t value)
+{
+    /* JSON-C does not know uint32, but int64 can hold an uint32 */
+    json_object_objarray_add(jobj, name, json_object_new_int64(value));
+}
+
+#if 0
+/* I-JSON demands this */
+static void
+render_leaf_int64(json_object *jobj, char *name, int64_t value)
+{
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%"PRIi64, value);
+    json_object_objarray_add(jobj, name, json_object_new_string(buf));
+}
+#endif
+
+/* I-JSON demands this */
+static void
+render_leaf_uint64(json_object *jobj, char *name, uint64_t value)
+{
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%"PRIu64, value);
+    json_object_objarray_add(jobj, name, json_object_new_string(buf));
 }
 
 static void
@@ -835,6 +898,152 @@ render_leaf_datetime(json_object *jobj, char *name, time_t *tp)
     }
 
     render_leaf(jobj, name, buf);
+}
+
+static void
+render_leaf_days_of_month(json_object *jobj, char *name, uint32_t days_of_month)
+{
+    int i;
+    json_object *ja;
+
+    ja = json_object_new_array();
+    if (!ja)
+	return;
+    json_object_object_add(jobj, name, ja);
+
+    if (days_of_month == UINT32_MAX) {
+	render_leaf(ja, name, "*");
+	return;
+    }
+
+    for (i = 1; i < 32; i++) {
+	if (days_of_month & (1 << i)) {
+	    render_leaf_int32(ja, name, i);
+	}
+    }
+}
+
+static void
+render_leaf_months(json_object *jobj, char *name, uint16_t months)
+{
+    json_object *ja;
+    int i;
+    struct {
+	char *name;
+	uint16_t value;
+    } tab[] = {
+	{ "january",	(1 << 0) },
+	{ "february",	(1 << 1) },
+	{ "march",	(1 << 2) },
+	{ "april",	(1 << 3) },
+	{ "may",	(1 << 4) },
+	{ "june",	(1 << 5) },
+	{ "july",	(1 << 6) },
+	{ "august",	(1 << 7) },
+	{ "september",	(1 << 8) },
+	{ "october",	(1 << 9) },
+	{ "november",	(1 << 10) },
+	{ "december",	(1 << 11) },
+	{ NULL, 0 }
+    };
+
+    ja = json_object_new_array();
+    if (!ja)
+	return;
+    json_object_object_add(jobj, name, ja);
+
+    if (months == UINT16_MAX) {
+	render_leaf(ja, name, "*");
+	return;
+    }
+
+    for (i = 0; tab[i].name; i++) {
+	if (months & tab[i].value) {
+	    render_leaf(ja, name, tab[i].name);
+	}
+    }
+}
+
+static void
+render_leaf_days_of_week(json_object *jobj, char *name, uint8_t days_of_week)
+{
+    json_object *ja;
+    int i;
+    struct {
+	char *name;
+	uint8_t value;
+    } tab[] = {
+	{ "monday",	(1 << 0) },
+	{ "tuesday",	(1 << 1) },
+	{ "wednesday",	(1 << 2) },
+	{ "thursday",	(1 << 3) },
+	{ "friday",	(1 << 4) },
+	{ "saturday",	(1 << 5) },
+	{ "sunday",	(1 << 6) },
+	{ NULL, 0 }
+    };
+
+    ja = json_object_new_array();
+    if (!ja)
+	return;
+    json_object_object_add(jobj, name, ja);
+
+    if (days_of_week == UINT8_MAX) {
+	render_leaf(ja, name, "*");
+	return;
+    }
+
+    for (i = 0; tab[i].name; i++) {
+	if (days_of_week & tab[i].value) {
+	    render_leaf(ja, name, tab[i].name);
+	}
+    }
+}
+
+static void
+render_leaf_hours(json_object *jobj, char *name, uint32_t hours)
+{
+    int i;
+    json_object *ja;
+
+    ja = json_object_new_array();
+    if (!ja)
+	return;
+    json_object_object_add(jobj, name, ja);
+
+    if (hours == UINT32_MAX) {
+	render_leaf(ja, name, "*");
+	return;
+    }
+
+    for (i = 0; i < 24; i++) {
+	if (hours & (1 << i)) {
+	    render_leaf_int32(ja, name, i);
+	}
+    }
+}
+
+static void
+render_leaf_minsecs(json_object *jobj, char *name, uint64_t minsecs)
+{
+    int i;
+    json_object *ja;
+
+    ja = json_object_new_array();
+    if (!ja)
+	return;
+    json_object_object_add(jobj, name, ja);
+
+    if (minsecs == UINT64_MAX) {
+	render_leaf(ja, name, "*");
+	return;
+    }
+
+    for (i = 0; i < 60; i++) {
+	if (minsecs & (1ull << i)) {
+	    render_leaf_int32(ja, name, i);
+	}
+    }
 }
 
 static void
@@ -1009,6 +1218,489 @@ render_result(struct result *res, json_object *jobj)
     }
 }
 
+static int
+render_agent(struct agent *agent, json_object *jobj, int what)
+{
+    assert(jobj);
+    json_object *ja;
+
+    if (!agent)
+	return 0;
+
+    ja = json_object_new_object();
+    if (!ja)
+	return -1;
+    json_object_object_add(jobj, "agent", ja);
+
+    if (what & RENDER_CONFIG_TRUE) {
+	render_leaf(ja, "agent-id", agent->agent_id);
+	render_leaf(ja, "group-id", agent->group_id);
+	render_leaf(ja, "measurement-point", agent->measurement_point);
+	if (agent->flags & LMAP_AGENT_FLAG_REPORT_AGENT_ID_SET)
+	    render_leaf_boolean(ja, "report-agent-id", agent->report_agent_id);
+        if (agent->flags & LMAP_AGENT_FLAG_REPORT_GROUP_ID_SET)
+	    render_leaf_boolean(ja, "report-group-id", agent->report_group_id);
+	if (agent->flags & LMAP_AGENT_FLAG_REPORT_MEASUREMENT_POINT_SET)
+	    render_leaf_boolean(ja, "report-measurement-point", agent->report_measurement_point);
+	if (agent->flags & LMAP_AGENT_FLAG_CONTROLLER_TIMEOUT_SET)
+	    render_leaf_uint32(ja, "controller-timeout", agent->controller_timeout);
+    }
+
+    if (what & RENDER_CONFIG_FALSE) {
+	if (agent->last_started)
+	    render_leaf_datetime(ja, "last-started", &agent->last_started);
+    }
+
+    return 0;
+}
+
+static void
+render_registries(struct registry *registries, json_object *jobj)
+{
+    json_object *ja, *jf;
+    struct registry *r;
+
+    ja = json_object_new_array();
+    if (!ja)
+	return;
+    json_object_object_add(jobj, "function", ja);
+
+    for (r = registries; r; r = r->next) {
+	jf = json_object_new_object();
+	if (!jf)
+	    return;
+	json_object_array_add(ja, jf);
+	render_leaf(jf, "uri", r->uri);
+	render_tags(r->roles, "role", jf);
+    }
+}
+
+static void
+render_action(struct action *action, json_object *jobj, int what)
+{
+    if(!action || !action->name)
+	return;
+
+    render_leaf(jobj, "name", action->name);
+    if (what & RENDER_CONFIG_TRUE) {
+	render_leaf(jobj, "task", action->task);
+        render_options(action->options, jobj);
+	render_tags(action->destinations, "destination", jobj);
+	render_tags(action->tags, "tag", jobj);
+	render_tags(action->suppression_tags, "suppression-tag", jobj);
+    }
+    if (what & RENDER_CONFIG_FALSE) {
+	char *state = NULL;
+	switch (action->state) {
+	case LMAP_SCHEDULE_STATE_ENABLED:
+	    state = "enabled";
+	    break;
+	case LMAP_SCHEDULE_STATE_DISABLED:
+	    state = "disabled";
+	    break;
+	case LMAP_SCHEDULE_STATE_RUNNING:
+	    state = "running";
+	    break;
+	case LMAP_SCHEDULE_STATE_SUPPRESSED:
+	    state = "suppressed";
+	    break;
+	}
+	render_leaf(jobj, "state", state);
+
+	render_leaf_uint64(jobj, "storage", action->storage);
+	render_leaf_uint32(jobj, "invocations", action->cnt_invocations);
+	render_leaf_uint32(jobj, "suppressions", action->cnt_suppressions);
+	render_leaf_uint32(jobj, "overlaps", action->cnt_overlaps);
+	render_leaf_uint32(jobj, "failures", action->cnt_failures);
+
+	if (action->last_invocation)
+	    render_leaf_datetime(jobj, "last-invocation", &action->last_invocation);
+	if (action->last_completion) {
+	    render_leaf_datetime(jobj, "last-completion", &action->last_completion);
+	    render_leaf_int32(jobj, "last-status", action->last_status);
+	    if (action->last_message)
+		render_leaf(jobj, "last-message", action->last_message);
+	}
+	if (action->last_failed_completion) {
+	    render_leaf_datetime(jobj, "last-failed-completion", &action->last_failed_completion);
+	    render_leaf_int32(jobj, "last-failed-status", action->last_failed_status);
+	    if (action->last_failed_message)
+		render_leaf(jobj, "last-failed-message", action->last_failed_message);
+	}
+    }
+}
+
+static void
+render_actions(struct action *actions, json_object *jobj, int what)
+{
+    json_object *ja, *jact;
+    struct action *a;
+
+    ja = json_object_new_array();
+    if (!ja)
+	return;
+    json_object_object_add(jobj, "action", ja);
+
+    for (a = actions; a; a = a->next) {
+	if (!a->name)
+	    continue;
+
+	jact = json_object_new_object();
+	if (!jact)
+	    return;
+	json_object_array_add(ja, jact);
+	render_action(a, jact, what);
+    }
+}
+
+
+static int
+render_schedules(struct schedule *schedule, json_object *jobj, int what)
+{
+    json_object *jss, *ja, *js;
+
+    if (!schedule)
+	return 0;
+    if (!jobj)
+	return -1;
+
+    jss = json_object_new_object();
+    if (!jss)
+	return -1;
+    json_object_object_add(jobj, "schedules", jss);
+    ja = json_object_new_array();
+    if (!ja)
+	return -1;
+    json_object_object_add(jss, "schedule", ja);
+
+    for (; schedule; schedule = schedule->next) {
+	if (!schedule->name)
+	    continue;
+
+	js = json_object_new_object();
+	if (!js)
+	    return -1;
+	json_object_array_add(ja, js);
+
+	render_leaf(js, "name", schedule->name);
+	if (what & RENDER_CONFIG_TRUE) {
+	    render_leaf(js, "start", schedule->start);
+	    if (schedule->flags & LMAP_SCHEDULE_FLAG_END_SET)
+		render_leaf(js, "end", schedule->end);
+	    if (schedule->flags & LMAP_SCHEDULE_FLAG_DURATION_SET)
+		render_leaf_uint64(js, "duration", schedule->duration);
+	    if (schedule->flags & LMAP_SCHEDULE_FLAG_EXEC_MODE_SET) {
+		char *mode = NULL;
+		switch (schedule->mode) {
+		case LMAP_SCHEDULE_EXEC_MODE_SEQUENTIAL:
+		    mode = "sequential";
+		    break;
+		case LMAP_SCHEDULE_EXEC_MODE_PARALLEL:
+		    mode = "parallel";
+		    break;
+		case LMAP_SCHEDULE_EXEC_MODE_PIPELINED:
+		    mode = "pipelined";
+		    break;
+		}
+		render_leaf(js, "execution-mode", mode);
+	    }
+	    render_tags(schedule->tags, "tag", js);
+	    render_tags(schedule->suppression_tags, "suppression-tag", js);
+	}
+	if (what & RENDER_CONFIG_FALSE) {
+	    char *state = NULL;
+	    switch (schedule->state) {
+	    case LMAP_SCHEDULE_STATE_ENABLED:
+		state = "enabled";
+		break;
+	    case LMAP_SCHEDULE_STATE_DISABLED:
+		state = "disabled";
+		break;
+	    case LMAP_SCHEDULE_STATE_RUNNING:
+		state = "running";
+	    break;
+	    case LMAP_SCHEDULE_STATE_SUPPRESSED:
+		state = "suppressed";
+		break;
+	    }
+	    render_leaf(js, "state", state);
+
+	    render_leaf_uint64(js, "storage", schedule->storage);
+	    render_leaf_uint32(js, "invocations", schedule->cnt_invocations);
+	    render_leaf_uint32(js, "suppressions", schedule->cnt_suppressions);
+	    render_leaf_uint32(js, "overlaps", schedule->cnt_overlaps);
+	    render_leaf_uint32(js, "failures", schedule->cnt_failures);
+
+	    if (schedule->last_invocation)
+		render_leaf_datetime(js, "last-invocation", &schedule->last_invocation);
+	}
+	render_actions(schedule->actions, js, what);
+    }
+    return 0;
+}
+
+static int
+render_suppressions(struct supp *supp, json_object *jobj, int what)
+{
+    json_object *jss, *ja, *js;
+
+    if (!supp)
+	return 0;
+    if (!jobj)
+	return -1;
+
+    jss = json_object_new_object();
+    if (!jss)
+	return -1;
+    json_object_object_add(jobj, "suppressions", jss);
+    ja = json_object_new_array();
+    if (!ja)
+	return -1;
+    json_object_object_add(jss, "suppression", ja);
+
+    for (; supp; supp = supp->next) {
+	if (!supp->name)
+	    continue;
+
+	js = json_object_new_object();
+	if (!js)
+	    return -1;
+	json_object_array_add(ja, js);
+
+	render_leaf(js, "name", supp->name);
+	if (what & RENDER_CONFIG_TRUE) {
+	    render_leaf(js, "start", supp->start);
+	    render_leaf(js, "end", supp->end);
+	    render_tags(supp->match, "match", js);
+	    if (supp->flags & LMAP_SUPP_FLAG_STOP_RUNNING_SET)
+		render_leaf_boolean(js, "stop-running", supp->stop_running);
+	}
+	if (what & RENDER_CONFIG_FALSE) {
+	    char *state = NULL;
+	    switch (supp->state) {
+	    case LMAP_SUPP_STATE_ENABLED:
+		state = "enabled";
+		break;
+	    case LMAP_SUPP_STATE_DISABLED:
+		state = "disabled";
+		break;
+	    case LMAP_SUPP_STATE_ACTIVE:
+		state = "active";
+		break;
+	    }
+	    render_leaf(js, "state", state);
+	}
+    }
+    return 0;
+}
+
+static int
+render_tasks(struct task *task, json_object *jobj, int what)
+{
+    json_object *jtasks, *ja, *jt;
+
+    if (!task || !jobj)
+	return 0;
+
+    jtasks = json_object_new_object();
+    if (!jtasks)
+	return -1;
+    json_object_object_add(jobj, "tasks", jtasks);
+    ja = json_object_new_array();
+    if (!ja)
+	return -1;
+    json_object_object_add(jtasks, "task", ja);
+
+    for (; task; task = task->next) {
+	if (!task->name)
+	    continue;
+
+	jt = json_object_new_object();
+	if (!jt)
+	    return -1;
+	json_object_array_add(ja, jt);
+
+	render_leaf(jt, "name", task->name);
+	render_registries(task->registries, jt);
+	if (what & RENDER_CONFIG_FALSE)
+	    render_leaf(jt, "version", task->version);
+	render_leaf(jt, "program", task->program);
+	if (what & RENDER_CONFIG_TRUE) {
+	    render_options(task->options, jt);
+	    render_tags(task->tags, "tag", jt);
+	}
+    }
+
+    return 0;
+}
+
+static int
+render_capabilities(struct capability *capability, json_object *jobj, int what)
+{
+    json_object *jo;
+
+    assert(jobj);
+
+    if (!capability
+        || !(what & RENDER_CONFIG_FALSE)
+	|| (!capability->version && !capability->tags && !capability->tasks))
+	return 0;
+
+    jo = json_object_new_object();
+    if (!jo)
+	return -1;
+    json_object_object_add(jobj, "capabilities", jo);
+    render_leaf(jo, "version", capability->version);
+    render_tags(capability->tags, "tag", jo);
+
+    return render_tasks(capability->tasks, jo, what);
+}
+
+static int
+render_events(struct event *event, json_object *jobj, int what)
+{
+    json_object *jevents, *ja, *je, *jsub;
+
+    assert (jobj);
+
+    if (!event)
+	return 0;
+
+    jevents = json_object_new_object();
+    if (!jevents)
+	return -1;
+    json_object_object_add(jobj, "events", jevents);
+    ja = json_object_new_array();
+    if (!ja)
+	return -1;
+    json_object_object_add(jevents, "event", ja);
+
+    for (; event; event = event->next) {
+	if (!event->name)
+	    continue;
+
+	je = json_object_new_object();
+	if (!je)
+	    return -1;
+	json_object_array_add(ja, je);
+
+	render_leaf(je, "name", event->name);
+	if (what & RENDER_CONFIG_TRUE) {
+	    if (event->flags & LMAP_EVENT_FLAG_RANDOM_SPREAD_SET)
+		render_leaf_int32(je, "random-spread", event->random_spread);
+	    if (event->flags & LMAP_EVENT_FLAG_CYCLE_INTERVAL_SET)
+		render_leaf_int32(je, "cycle-interval", event->cycle_interval);
+	    switch (event->type) {
+	    case LMAP_EVENT_TYPE_PERIODIC:
+		if (!(jsub = json_object_new_object()))
+		    return -1;
+		json_object_object_add(je, "periodic", jsub);
+		if (event->flags & LMAP_EVENT_FLAG_INTERVAL_SET)
+		    render_leaf_uint32(jsub, "interval", event->interval);
+		if (event->flags & LMAP_EVENT_FLAG_START_SET)
+		    render_leaf_datetime(jsub, "start", &event->start);
+		if (event->flags & LMAP_EVENT_FLAG_END_SET)
+		    render_leaf_datetime(jsub, "end", &event->end);
+		break;
+	    case LMAP_EVENT_TYPE_CALENDAR:
+		if (!(jsub = json_object_new_object()))
+		    return -1;
+		json_object_object_add(je, "calendar", jsub);
+		if (event->months)
+		    render_leaf_months(jsub, "month", event->months);
+		if (event->days_of_month)
+		    render_leaf_days_of_month(jsub, "day-of-month", event->days_of_month);
+		if (event->days_of_week)
+		    render_leaf_days_of_week(jsub, "day-of-week", event->days_of_week);
+		if (event->hours)
+		    render_leaf_hours(jsub, "hour", event->hours);
+		if (event->minutes)
+		    render_leaf_minsecs(jsub, "minute", event->minutes);
+		if (event->seconds)
+		    render_leaf_minsecs(jsub, "second", event->seconds);
+		if (event->flags & LMAP_EVENT_FLAG_TIMEZONE_OFFSET_SET) {
+		    char buf[42];
+		    char c = (event->timezone_offset < 0) ? '-' : '+';
+		    int16_t offset = event->timezone_offset;
+		    offset = (offset < 0) ? -1 * offset : offset;
+		    snprintf(buf, sizeof(buf), "%c%02d:%02d",
+			     c, offset / 60, offset % 60);
+		    render_leaf(jsub, "timezone-offset", buf);
+		}
+		if (event->flags & LMAP_EVENT_FLAG_START_SET)
+		    render_leaf_datetime(jsub, "start", &event->start);
+		if (event->flags & LMAP_EVENT_FLAG_END_SET)
+		    render_leaf_datetime(jsub, "end", &event->end);
+		break;
+	    case LMAP_EVENT_TYPE_ONE_OFF:
+		if (!(jsub = json_object_new_object()))
+		    return -1;
+		json_object_object_add(je, "one-off", jsub);
+		if (event->flags & LMAP_EVENT_FLAG_START_SET)
+		    render_leaf_datetime(jsub, "time", &event->start);
+		break;
+	    case LMAP_EVENT_TYPE_STARTUP:
+		render_empty_leaf(je, "startup");
+		break;
+	    case LMAP_EVENT_TYPE_IMMEDIATE:
+		render_empty_leaf(je, "immediate");
+		break;
+	    case LMAP_EVENT_TYPE_CONTROLLER_LOST:
+		render_empty_leaf(je, "controller-lost");
+		break;
+	    case LMAP_EVENT_TYPE_CONTROLLER_CONNECTED:
+		render_empty_leaf(je, "controller-connected");
+		break;
+	    }
+	}
+    }
+
+    return 0;
+}
+
+/**
+ * @brief Returns a JSON rendering of the lmap config or state
+ *
+ * @param lmap The pointer to the lmap config to be rendered.
+ * @param what PARSER_CONFIG_* to remove state fields from config
+ * @return An JSON document as a string that must be freed by the
+ *         caller or NULL on error
+ */
+static char *
+render_control(struct lmap *lmap, int what)
+{
+    json_object *docobj, *rootobj;
+    char *result = NULL;
+    const char *doc;
+
+    assert(lmap);
+
+    /* FIXME: we cannot differentiate state from config except by context
+     *        or by looking for a CONFIG:FALSE field... */
+
+    if (!(rootobj = json_object_new_object()))
+	return NULL;
+    if (!(docobj = json_object_new_object()))
+	goto err_exit;
+    json_object_object_add(rootobj, LMAPC_JSON_NAMESPACE ":lmap", docobj);
+
+    if (!render_capabilities(lmap->capabilities, docobj, what)
+		&& !render_agent(lmap->agent, docobj, what)
+		&& !render_tasks(lmap->tasks, docobj, what)
+		&& !render_schedules(lmap->schedules, docobj, what)
+		&& !render_suppressions(lmap->supps, docobj, what)
+		&& !render_events(lmap->events, docobj, what)) {
+	doc = json_object_to_json_string_ext(rootobj, JSON_C_TO_STRING_PRETTY);
+	if (doc)
+	    result = strdup(doc);
+    }
+
+err_exit:
+    json_object_put(rootobj);
+
+    return result;
+}
+
 /**
  * @brief Returns a JSON rendering of the lmap config
  *
@@ -1022,7 +1714,7 @@ render_result(struct result *res, json_object *jobj)
 char *
 lmap_json_render_config(struct lmap *lmap)
 {
-    return NULL;
+    return render_control(lmap, RENDER_CONFIG_TRUE);
 }
 
 /**
@@ -1038,7 +1730,7 @@ lmap_json_render_config(struct lmap *lmap)
 char *
 lmap_json_render_state(struct lmap *lmap)
 {
-    return NULL;
+    return render_control(lmap, RENDER_CONFIG_TRUE | RENDER_CONFIG_FALSE);
 }
 
 /**
