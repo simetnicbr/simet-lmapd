@@ -838,6 +838,25 @@ render_leaf_datetime(json_object *jobj, char *name, time_t *tp)
 }
 
 static void
+render_tags(struct tag *tags, const char *name, json_object *jobj)
+{
+    json_object *ja;
+    struct tag *t;
+
+    if (!tags)
+	return;
+
+    ja = json_object_new_array();
+    if (!ja)
+	return;
+    json_object_object_add(jobj, name, ja);
+    for (t = tags; t; t = t->next) {
+	json_object_array_add(ja, json_object_new_string(t->tag));
+    }
+}
+
+/* jobj is the option array */
+static void
 render_option(struct option *option, json_object *jobj)
 {
     json_object *robj;
@@ -855,6 +874,24 @@ render_option(struct option *option, json_object *jobj)
     render_leaf(robj, "id", option->id);
     render_leaf(robj, "name", option->name);
     render_leaf(robj, "value", option->value);
+}
+
+static void
+render_options(struct option *options, json_object *jobj)
+{
+    struct option *opt;
+    json_object *ja;
+
+    if (!options)
+	return;
+
+    ja = json_object_new_array();
+    if (ja) {
+	json_object_object_add(jobj, "option", ja);
+	for (opt = options; opt; opt = opt->next) {
+	    render_option(opt, ja);
+	}
+    }
 }
 
 static void
@@ -929,8 +966,6 @@ render_result(struct result *res, json_object *jobj)
 {
     json_object *robj;
     json_object *aobj;
-    struct option *option;
-    struct tag *tag;
     struct table *tab;
 
     robj = json_object_new_object();
@@ -942,20 +977,8 @@ render_result(struct result *res, json_object *jobj)
     render_leaf(robj, "schedule", res->schedule);
     render_leaf(robj, "action", res->action);
     render_leaf(robj, "task", res->task);
-    aobj = json_object_new_array();
-    if (aobj) {
-	json_object_object_add(robj, "option", aobj);
-	for (option = res->options; option; option = option->next) {
-	    render_option(option, aobj);
-	}
-    }
-    aobj = json_object_new_array();
-    if (aobj) {
-	json_object_object_add(robj, "tag", aobj);
-	for (tag = res->tags; tag; tag = tag->next) {
-	    json_object_array_add(aobj, json_object_new_string(tag->tag));
-	}
-    }
+    render_options(res->options, robj);
+    render_tags(res->tags, "tag", robj);
 
     if (res->event) {
 	render_leaf_datetime(robj, "event", &res->start);
