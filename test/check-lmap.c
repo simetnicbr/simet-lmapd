@@ -564,6 +564,57 @@ START_TEST(test_lmap_result)
 }
 END_TEST
 
+/*
+ * Roundtrip-style (parse-render-parse-render) test
+ *
+ * The second document should be exactly what the render would output
+ */
+typedef int (parser_func)(struct lmap *, const char *);
+typedef char *(render_func)(struct lmap *);
+
+void xx_test_roundtrip_doc(const char *doc_a, const char *doc_b,
+			parser_func* parse, render_func *render)
+{
+    char *str_b, *str_c;
+    struct lmap *lmap_a = NULL, *lmap_b = NULL;
+
+    lmap_a = lmap_new();
+    ck_assert_ptr_ne(lmap_a, NULL);
+    ck_assert_int_eq((* parse)(lmap_a, doc_a), 0);
+    str_b = (* render)(lmap_a);
+    ck_assert_ptr_ne(str_b, NULL);
+
+    lmap_b = lmap_new();
+    ck_assert_ptr_ne(lmap_b, NULL);
+    ck_assert_int_eq((* parse)(lmap_b, str_b), 0);
+    str_c = (* render)(lmap_a);
+    ck_assert_ptr_ne(str_c, NULL);
+
+    ck_assert_str_eq(str_b, str_c);
+    ck_assert_str_eq(str_c, doc_b);
+
+    lmap_free(lmap_a); lmap_free(lmap_b);
+    free(str_b); free(str_c);
+}
+
+void xx_test_roundtrip_config_xml(const char *xml_a, const char *xml_b)
+{
+    xx_test_roundtrip_doc(xml_a, xml_b,
+	lmap_xml_parse_config_string, lmap_xml_render_config);
+}
+
+void xx_test_roundtrip_state_xml(const char *xml_a, const char *xml_b)
+{
+    xx_test_roundtrip_doc(xml_a, xml_b,
+	lmap_xml_parse_state_string, lmap_xml_render_state);
+}
+
+void xx_test_roundtrip_report_xml(const char *xml_a, const char *xml_b)
+{
+    xx_test_roundtrip_doc(xml_a, xml_b,
+	lmap_xml_parse_report_string, lmap_xml_render_report);
+}
+
 START_TEST(test_parser_config_agent)
 {
     const char *a =
@@ -590,26 +641,8 @@ START_TEST(test_parser_config_agent)
         "    </lmapc:agent>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapa, a), 0);
-    b = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapb, b), 0);
-    c = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_config_xml(a, x);
 }
 END_TEST
 
@@ -645,26 +678,8 @@ START_TEST(test_parser_config_suppressions)
         "    </lmapc:suppressions>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapa, a), 0);
-    b = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapb, b), 0);
-    c = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_config_xml(a, x);
 }
 END_TEST
 
@@ -726,26 +741,8 @@ START_TEST(test_parser_config_tasks)
         "    </lmapc:tasks>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapa, a), 0);
-    b = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapb, b), 0);
-    c = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_config_xml(a, x);
 }
 END_TEST
 
@@ -837,26 +834,8 @@ START_TEST(test_parser_config_events)
         "    </lmapc:events>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapa, a), 0);
-    b = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapb, b), 0);
-    c = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_config_xml(a, x);
 }
 END_TEST
 
@@ -926,26 +905,8 @@ START_TEST(test_parser_config_events_calendar0)
         "    </lmapc:events>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapa, a), 0);
-    b = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapb, b), 0);
-    c = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_config_xml(a, x);
 }
 END_TEST
 
@@ -1015,26 +976,8 @@ START_TEST(test_parser_config_events_calendar1)
         "    </lmapc:events>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapa, a), 0);
-    b = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapb, b), 0);
-    c = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_config_xml(a, x);
 }
 END_TEST
 
@@ -1110,26 +1053,8 @@ START_TEST(test_parser_config_events_calendar2)
         "    </lmapc:events>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapa, a), 0);
-    b = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapb, b), 0);
-    c = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_config_xml(a, x);
 }
 END_TEST
 
@@ -1195,26 +1120,8 @@ START_TEST(test_parser_config_events_calendar3)
         "    </lmapc:events>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapa, a), 0);
-    b = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapb, b), 0);
-    c = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_config_xml(a, x);
 }
 END_TEST
 
@@ -1291,26 +1198,8 @@ START_TEST(test_parser_config_schedules)
         "    </lmapc:schedules>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapa, a), 0);
-    b = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapb, b), 0);
-    c = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_config_xml(a, x);
 }
 END_TEST
 
@@ -1380,26 +1269,8 @@ START_TEST(test_parser_config_actions)
         "    </lmapc:schedules>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapa, a), 0);
-    b = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapb, b), 0);
-    c = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_config_xml(a, x);
 }
 END_TEST
 
@@ -1521,26 +1392,8 @@ START_TEST(test_parser_state_agent)
         "    </lmapc:agent>\n"
         "  </lmapc:lmap>\n"
         "</data>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_state_string(lmapa, a), 0);
-    b = lmap_xml_render_state(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_state_string(lmapb, b), 0);
-    c = lmap_xml_render_state(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_state_xml(a, x);
 }
 END_TEST
 
@@ -1571,26 +1424,8 @@ START_TEST(test_parser_state_capabilities)
         "    </lmapc:capabilities>\n"
         "  </lmapc:lmap>\n"
         "</data>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_state_string(lmapa, a), 0);
-    b = lmap_xml_render_state(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_state_string(lmapb, b), 0);
-    c = lmap_xml_render_state(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_state_xml(a, x);
 }
 END_TEST
 
@@ -1626,26 +1461,8 @@ START_TEST(test_parser_state_capability_tasks)
         "    </lmapc:capabilities>\n"
         "  </lmapc:lmap>\n"
         "</data>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_state_string(lmapa, a), 0);
-    b = lmap_xml_render_state(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_state_string(lmapb, b), 0);
-    c = lmap_xml_render_state(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_state_xml(a, x);
 }
 END_TEST
 
@@ -1687,26 +1504,8 @@ START_TEST(test_parser_state_schedules)
 	"    </lmapc:schedules>\n"
         "  </lmapc:lmap>\n"
         "</data>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_state_string(lmapa, a), 0);
-    b = lmap_xml_render_state(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_state_string(lmapb, b), 0);
-    c = lmap_xml_render_state(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_state_xml(a, x);
 }
 END_TEST
 
@@ -1790,26 +1589,8 @@ START_TEST(test_parser_state_actions)
 	"    </lmapc:schedules>\n"
         "  </lmapc:lmap>\n"
         "</data>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_state_string(lmapa, a), 0);
-    b = lmap_xml_render_state(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_state_string(lmapb, b), 0);
-    c = lmap_xml_render_state(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_state_xml(a, x);
 }
 END_TEST
 
@@ -1978,26 +1759,8 @@ START_TEST(test_parser_report)
 	"    </lmapr:result>\n"
 	"  </lmapr:report>\n"
 	"</rpc>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_report_string(lmapa, a), 0);
-    b = lmap_xml_render_report(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_report_string(lmapb, b), 0);
-    c = lmap_xml_render_report(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, a);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_report_xml(a, a);
 }
 END_TEST
 
