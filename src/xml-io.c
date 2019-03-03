@@ -2453,11 +2453,21 @@ static void
 render_table(struct table *tab, xmlNodePtr root, xmlNsPtr ns)
 {
     xmlNodePtr node;
+    struct registry *reg;
+    struct value *val;
     struct row *row;
 
     node = xmlNewChild(root, ns, BAD_CAST "table", NULL);
     if (!node) {
 	return;
+    }
+
+    for (reg = tab->registries; reg; reg = reg->next) {
+	render_registry(reg, node, ns);
+    }
+
+    for (val = tab->columns; val; val = val->next) {
+	render_leaf(node, ns, "column", val->value ? val->value : "");
     }
 
     for (row = tab->rows; row; row = row->next) {

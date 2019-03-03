@@ -2092,9 +2092,9 @@ render_row(struct row *row, json_object *jobj)
 static void
 render_table(struct table *tab, json_object *jobj)
 {
-    json_object *robj;
-    json_object *aobj;
+    json_object *robj, *aobj;
     struct row *row;
+    struct value *val;
 
     robj = json_object_new_object();
     if (! robj) {
@@ -2102,12 +2102,24 @@ render_table(struct table *tab, json_object *jobj)
     }
     json_object_array_add(jobj, robj);
 
+    if (tab->registries)
+        render_registries(tab->registries, robj);
+
+    if (tab->columns) {
+	if (!(aobj = json_object_new_array()))
+	    return;
+	json_object_object_add(robj, "column", aobj);
+	for (val = tab->columns; val; val = val->next) {
+	    json_object_array_add(aobj, json_object_new_string(val->value ? val->value : ""));
+	}
+    }
+
     aobj = json_object_new_array();
     if (! aobj) {
 	return;
     }
-
     json_object_object_add(robj, "row", aobj);
+
     for (row = tab->rows; row; row = row->next) {
 	render_row(row, aobj);
     }
