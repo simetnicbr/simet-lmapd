@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.0.0 FATAL_ERROR)
 project(lmapd VERSION 0.4.0 LANGUAGES C)
 
 option(BUILD_SHARED_LIBS "Build the shared library" OFF)
-option(BUILD_TESTS "Build test programs" ON)
+option(BUILD_TESTS "Build test programs (requires JSON and XML support)" ON)
 option(BUILD_JSON  "Build with JSON support (requires json-c)" ON)
 option(BUILD_XML   "Build with XML support (requires libxml2)" ON)
 
@@ -34,12 +34,12 @@ add_subdirectory(doc)
 add_subdirectory(src)
 
 # testing related definitions
-if(BUILD_TESTS AND BUILD_XML)
+if(BUILD_TESTS AND BUILD_XML AND BUILD_JSON)
     add_subdirectory(test)
     enable_testing()
     add_test(NAME lmap COMMAND check-lmap)
     add_test(NAME lmapd COMMAND check-lmapd)
-endif(BUILD_TESTS AND BUILD_XML)
+endif(BUILD_TESTS AND BUILD_XML AND BUILD_JSON)
 
 # source packages 'make package_source' or 'make dist'
 set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})

@@ -23,6 +23,7 @@
 #include "lmap.h"
 #include "utils.h"
 #include "xml-io.h"
+#include "json-io.h"
 #include "csv.h"
 
 static char last_error_msg[1024];
@@ -567,52 +568,90 @@ END_TEST
 /*
  * Roundtrip-style (parse-render-parse-render) test
  *
- * The second document should be exactly what the render would output
+ * Document "b" should be exactly what the render would output
  */
 typedef int (parser_func)(struct lmap *, const char *);
 typedef char *(render_func)(struct lmap *);
 
-void xx_test_roundtrip_doc(const char *doc_a, const char *doc_b,
-			parser_func* parse, render_func *render)
+static void xx_create_doc_and_roundtrip_test(struct lmap ** const plmap, char ** const pstr,
+	const char * const doc, parser_func* const parse, render_func * const render)
 {
-    char *str_b, *str_c;
-    struct lmap *lmap_a = NULL, *lmap_b = NULL;
+    char *str_a;
+    struct lmap *lmap_a = NULL;
 
     lmap_a = lmap_new();
     ck_assert_ptr_ne(lmap_a, NULL);
-    ck_assert_int_eq((* parse)(lmap_a, doc_a), 0);
-    str_b = (* render)(lmap_a);
-    ck_assert_ptr_ne(str_b, NULL);
+    ck_assert_int_eq((* parse)(lmap_a, doc), 0);
+    str_a = (* render)(lmap_a);
+    ck_assert_ptr_ne(str_a, NULL);
 
-    lmap_b = lmap_new();
-    ck_assert_ptr_ne(lmap_b, NULL);
-    ck_assert_int_eq((* parse)(lmap_b, str_b), 0);
-    str_c = (* render)(lmap_a);
-    ck_assert_ptr_ne(str_c, NULL);
+    if (plmap)
+	(*plmap) = lmap_a;
+    else
+	lmap_free(lmap_a);
 
-    ck_assert_str_eq(str_b, str_c);
-    ck_assert_str_eq(str_c, doc_b);
-
-    lmap_free(lmap_a); lmap_free(lmap_b);
-    free(str_b); free(str_c);
+    if (pstr)
+	(*pstr) = str_a;
+    else
+	free(str_a);
 }
 
-void xx_test_roundtrip_config_xml(const char *xml_a, const char *xml_b)
+static void xx_test_roundtrip(const char *doc1_a, const char *doc1_b,
+		const char *doc2_a, const char *doc2_b,
+		parser_func * const parse1, render_func * const render1,
+		parser_func * const parse2, render_func * const render2)
 {
-    xx_test_roundtrip_doc(xml_a, xml_b,
-	lmap_xml_parse_config_string, lmap_xml_render_config);
+    char *str1_a = NULL, *str1_c = NULL, *str1_d = NULL;
+    char *str2_a = NULL, *str2_c = NULL, *str2_d = NULL;
+    struct lmap *lmap1_a = NULL, *lmap1_b = NULL;
+    struct lmap *lmap2_a = NULL, *lmap2_b = NULL;
+
+    xx_create_doc_and_roundtrip_test(&lmap1_a, &str1_a, doc1_a, parse1, render1);
+    xx_create_doc_and_roundtrip_test(&lmap1_b, &str1_c, str1_a, parse1, render1);
+    ck_assert_str_eq(str1_a, str1_c);
+    ck_assert_str_eq(str1_c, doc1_b);
+
+    xx_create_doc_and_roundtrip_test(&lmap2_a, &str2_a, doc2_a, parse2, render2);
+    xx_create_doc_and_roundtrip_test(&lmap2_b, &str2_c, str2_a, parse2, render2);
+    ck_assert_str_eq(str2_a, str2_c);
+    ck_assert_str_eq(str2_c, doc2_b);
+
+    /* cross-check data model contents */
+    str1_d = (* render1)(lmap2_a);
+    ck_assert_ptr_ne(str1_d, NULL);
+    ck_assert_str_eq(str1_a, str1_d);
+
+    str2_d = (* render2)(lmap1_a);
+    ck_assert_ptr_ne(str2_d, NULL);
+    ck_assert_str_eq(str2_a, str2_d);
+
+    lmap_free(lmap1_a); lmap_free(lmap1_b); lmap_free(lmap2_a); lmap_free(lmap2_b);
+    free(str1_a); free(str1_c); free(str1_d);
+    free(str2_a); free(str2_c); free(str2_d);
 }
 
-void xx_test_roundtrip_state_xml(const char *xml_a, const char *xml_b)
+static void xx_test_roundtrip_config(const char *xml_a, const char *xml_b,
+			      const char *json_a, const char *json_b)
 {
-    xx_test_roundtrip_doc(xml_a, xml_b,
-	lmap_xml_parse_state_string, lmap_xml_render_state);
+    xx_test_roundtrip(xml_a, xml_b, json_a, json_b,
+	lmap_xml_parse_config_string, lmap_xml_render_config,
+	lmap_json_parse_config_string, lmap_json_render_config);
 }
 
-void xx_test_roundtrip_report_xml(const char *xml_a, const char *xml_b)
+static void xx_test_roundtrip_state(const char *xml_a, const char *xml_b,
+			      const char *json_a, const char *json_b)
 {
-    xx_test_roundtrip_doc(xml_a, xml_b,
-	lmap_xml_parse_report_string, lmap_xml_render_report);
+    xx_test_roundtrip(xml_a, xml_b, json_a, json_b,
+	lmap_xml_parse_state_string, lmap_xml_render_state,
+	lmap_json_parse_state_string, lmap_json_render_state);
+}
+
+static void xx_test_roundtrip_report(const char *xml_a, const char *xml_b,
+			      const char *json_a, const char *json_b)
+{
+    xx_test_roundtrip(xml_a, xml_b, json_a, json_b,
+	lmap_xml_parse_report_string, lmap_xml_render_report,
+	lmap_json_parse_report_string, lmap_json_render_report);
 }
 
 START_TEST(test_parser_config_agent)
@@ -641,8 +680,22 @@ START_TEST(test_parser_config_agent)
         "    </lmapc:agent>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
+    const char *ja =
+	"{\"ietf-lmap-control:lmap\":{\"agent\":{\"report-agent-id\":true,\"report-group-id\":false,\n"
+	"\"report-measurement-point\": false,\n\n \"controller-timeout\": 42\n  } } }\n   \n";
+    const char *jx =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"agent\":{\n"
+	"      \"report-agent-id\":true,\n"
+	"      \"report-group-id\":false,\n"
+	"      \"report-measurement-point\":false,\n"
+	"      \"controller-timeout\":42\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    xx_test_roundtrip_config_xml(a, x);
+    xx_test_roundtrip_config(a, x, ja, jx);
 }
 END_TEST
 
@@ -678,8 +731,25 @@ START_TEST(test_parser_config_suppressions)
         "    </lmapc:suppressions>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
+    char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"suppressions\":{\n"
+	"      \"suppression\":[\n"
+	"        {\n"
+	"          \"name\":\"foo\",\n"
+	"          \"match\":[\n"
+	"            \"red\",\n"
+	"            \"blue\"\n"
+	"          ],\n"
+	"          \"stop-running\":true\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    xx_test_roundtrip_config_xml(a, x);
+    xx_test_roundtrip_config(a, x, ja, ja);
 }
 END_TEST
 
@@ -741,8 +811,44 @@ START_TEST(test_parser_config_tasks)
         "    </lmapc:tasks>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"tasks\":{\n"
+	"      \"task\":[\n"
+	"        {\n"
+	"          \"name\":\"foo\",\n"
+	"          \"function\":[\n"
+	"            {\n"
+	"              \"uri\":\"urn:example\",\n"
+	"              \"role\":[\n"
+	"                \"client\",\n"
+	"                \"server\"\n"
+	"              ]\n"
+	"            }\n"
+	"          ],\n"
+	"          \"program\":\"noop\",\n"
+	"          \"option\":[\n"
+	"            {\n"
+	"              \"id\":\"numeric\",\n"
+	"              \"name\":\"-n\"\n"
+	"            },\n"
+	"            {\n"
+	"              \"id\":\"target\",\n"
+	"              \"value\":\"www.example.com\"\n"
+	"            }\n"
+	"          ],\n"
+	"          \"tag\":[\n"
+	"            \"red\",\n"
+	"            \"blue\"\n"
+	"          ]\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    xx_test_roundtrip_config_xml(a, x);
+    xx_test_roundtrip_config(a, x, ja, ja);
 }
 END_TEST
 
@@ -834,8 +940,59 @@ START_TEST(test_parser_config_events)
         "    </lmapc:events>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"events\":{\n"
+	"      \"event\":[\n"
+	"        {\n"
+	"          \"name\":\"foo\"\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"periodic\",\n"
+	"          \"random-spread\":300000,\n"
+	"          \"periodic\":{\n"
+	"            \"interval\":4321,\n"
+	"            \"start\":\"2015-02-01T15:44:21+00:00\",\n"
+	"            \"end\":\"2015-03-01T00:00:00+00:00\"\n"
+	"          }\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"once\",\n"
+	"          \"one-off\":{\n"
+	"            \"time\":\"2015-02-01T15:44:21+00:00\"\n"
+	"          }\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"startup\",\n"
+	"          \"startup\":[\n"
+	"            null\n"
+	"          ]\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"immediate\",\n"
+	"          \"immediate\":[\n"
+	"            null\n"
+	"          ]\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"controller-lost\",\n"
+	"          \"controller-lost\":[\n"
+	"            null\n"
+	"          ]\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"controller-connected\",\n"
+	"          \"controller-connected\":[\n"
+	"            null\n"
+	"          ]\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    xx_test_roundtrip_config_xml(a, x);
+    xx_test_roundtrip_config(a, x, ja, ja);
 }
 END_TEST
 
@@ -905,8 +1062,65 @@ START_TEST(test_parser_config_events_calendar0)
         "    </lmapc:events>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"events\":{\n"
+	"      \"event\":[\n"
+	"        {\n"
+	"          \"name\":\"monthly\",\n"
+	"          \"calendar\":{\n"
+	"            \"month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-month\":[\n"
+	"              1\n"
+	"            ],\n"
+	"            \"day-of-week\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"hour\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"minute\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"second\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"timezone-offset\":\"+00:00\"\n"
+	"          }\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"weekly\",\n"
+	"          \"calendar\":{\n"
+	"            \"month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-week\":[\n"
+	"              \"monday\"\n"
+	"            ],\n"
+	"            \"hour\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"minute\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"second\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"timezone-offset\":\"-01:00\"\n"
+	"          }\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    xx_test_roundtrip_config_xml(a, x);
+    xx_test_roundtrip_config(a, x, ja, ja);
 }
 END_TEST
 
@@ -976,8 +1190,65 @@ START_TEST(test_parser_config_events_calendar1)
         "    </lmapc:events>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"events\":{\n"
+	"      \"event\":[\n"
+	"        {\n"
+	"          \"name\":\"daily\",\n"
+	"          \"calendar\":{\n"
+	"            \"month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-week\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"hour\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"minute\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"second\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"timezone-offset\":\"+01:00\"\n"
+	"          }\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"hourly\",\n"
+	"          \"calendar\":{\n"
+	"            \"month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-week\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"hour\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"minute\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"second\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"timezone-offset\":\"-01:30\"\n"
+	"          }\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    xx_test_roundtrip_config_xml(a, x);
+    xx_test_roundtrip_config(a, x, ja, ja);
 }
 END_TEST
 
@@ -1053,8 +1324,68 @@ START_TEST(test_parser_config_events_calendar2)
         "    </lmapc:events>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"events\":{\n"
+	"      \"event\":[\n"
+	"        {\n"
+	"          \"name\":\"hourly-on-weekends\",\n"
+	"          \"calendar\":{\n"
+	"            \"month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-week\":[\n"
+	"              \"saturday\",\n"
+	"              \"sunday\"\n"
+	"            ],\n"
+	"            \"hour\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"minute\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"second\":[\n"
+	"              0\n"
+	"            ]\n"
+	"          }\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"once-every-six-hours\",\n"
+	"          \"calendar\":{\n"
+	"            \"month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-week\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"hour\":[\n"
+	"              0,\n"
+	"              6,\n"
+	"              12,\n"
+	"              18\n"
+	"            ],\n"
+	"            \"minute\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"second\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"end\":\"2014-09-29T22:00:00+00:00\"\n"
+	"          }\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    xx_test_roundtrip_config_xml(a, x);
+    xx_test_roundtrip_config(a, x, ja, ja);
 }
 END_TEST
 
@@ -1120,8 +1451,63 @@ START_TEST(test_parser_config_events_calendar3)
         "    </lmapc:events>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"events\":{\n"
+	"      \"event\":[\n"
+	"        {\n"
+	"          \"name\":\"dec-31-11.00\",\n"
+	"          \"calendar\":{\n"
+	"            \"month\":[\n"
+	"              \"december\"\n"
+	"            ],\n"
+	"            \"day-of-month\":[\n"
+	"              31\n"
+	"            ],\n"
+	"            \"day-of-week\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"hour\":[\n"
+	"              11\n"
+	"            ],\n"
+	"            \"minute\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"second\":[\n"
+	"              0\n"
+	"            ]\n"
+	"          }\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"jan-01-15.00\",\n"
+	"          \"calendar\":{\n"
+	"            \"month\":[\n"
+	"              \"january\"\n"
+	"            ],\n"
+	"            \"day-of-month\":[\n"
+	"              1\n"
+	"            ],\n"
+	"            \"day-of-week\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"hour\":[\n"
+	"              15\n"
+	"            ],\n"
+	"            \"minute\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"second\":[\n"
+	"              0\n"
+	"            ]\n"
+	"          }\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    xx_test_roundtrip_config_xml(a, x);
+    xx_test_roundtrip_config(a, x, ja, ja);
 }
 END_TEST
 
@@ -1198,8 +1584,57 @@ START_TEST(test_parser_config_schedules)
         "    </lmapc:schedules>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"schedules\":{\n"
+	"      \"schedule\":[\n"
+	"        {\n"
+	"          \"name\":\"foo\",\n"
+	"          \"action\":[\n"
+	"          ]\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"bar\",\n"
+	"          \"start\":\"now\",\n"
+	"          \"execution-mode\":\"sequential\",\n"
+	"          \"action\":[\n"
+	"          ]\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"baz\",\n"
+	"          \"start\":\"now\",\n"
+	"          \"end\":\"tomorrow\",\n"
+	"          \"execution-mode\":\"parallel\",\n"
+	"          \"action\":[\n"
+	"          ]\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"qux\",\n"
+	"          \"start\":\"now\",\n"
+	"          \"duration\":\"42\",\n"
+	"          \"execution-mode\":\"pipelined\",\n"
+	"          \"action\":[\n"
+	"          ]\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"tag\",\n"
+	"          \"start\":\"now\",\n"
+	"          \"tag\":[\n"
+	"            \"red\"\n"
+	"          ],\n"
+	"          \"suppression-tag\":[\n"
+	"            \"blue\"\n"
+	"          ],\n"
+	"          \"action\":[\n"
+	"          ]\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    xx_test_roundtrip_config_xml(a, x);
+    xx_test_roundtrip_config(a, x, ja, ja);
 }
 END_TEST
 
@@ -1269,8 +1704,44 @@ START_TEST(test_parser_config_actions)
         "    </lmapc:schedules>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"schedules\":{\n"
+	"      \"schedule\":[\n"
+	"        {\n"
+	"          \"name\":\"foo\",\n"
+	"          \"start\":\"now\",\n"
+	"          \"action\":[\n"
+	"            {\n"
+	"              \"name\":\"foo\"\n"
+	"            },\n"
+	"            {\n"
+	"              \"name\":\"bar\",\n"
+	"              \"option\":[\n"
+	"                {\n"
+	"                  \"id\":\"a\",\n"
+	"                  \"value\":\"v\"\n"
+	"                },\n"
+	"                {\n"
+	"                  \"id\":\"b\",\n"
+	"                  \"name\":\"n\"\n"
+	"                },\n"
+	"                {\n"
+	"                  \"id\":\"c\",\n"
+	"                  \"name\":\"n\",\n"
+	"                  \"value\":\"n\"\n"
+	"                }\n"
+	"              ]\n"
+	"            }\n"
+	"          ]\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    xx_test_roundtrip_config_xml(a, x);
+    xx_test_roundtrip_config(a, x, ja, ja);
 }
 END_TEST
 
@@ -1392,8 +1863,17 @@ START_TEST(test_parser_state_agent)
         "    </lmapc:agent>\n"
         "  </lmapc:lmap>\n"
         "</data>\n";
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"agent\":{\n"
+	"      \"agent-id\":\"550e8400-e29b-41d4-a716-446655440000\",\n"
+	"      \"last-started\":\"2016-02-21T21:13:40+00:00\"\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    xx_test_roundtrip_state_xml(a, x);
+    xx_test_roundtrip_state(a, x, ja, ja);
 }
 END_TEST
 
@@ -1424,8 +1904,21 @@ START_TEST(test_parser_state_capabilities)
         "    </lmapc:capabilities>\n"
         "  </lmapc:lmap>\n"
         "</data>\n";
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"capabilities\":{\n"
+	"      \"version\":\"lmap version 0.3\",\n"
+	"      \"tag\":[\n"
+	"        \"system:IPv4 Capable\",\n"
+	"        \"system:IPv4 Works\",\n"
+	"        \"system:IPv6 Capable\"\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    xx_test_roundtrip_state_xml(a, x);
+    xx_test_roundtrip_state(a, x, ja, ja);
 }
 END_TEST
 
@@ -1461,8 +1954,26 @@ START_TEST(test_parser_state_capability_tasks)
         "    </lmapc:capabilities>\n"
         "  </lmapc:lmap>\n"
         "</data>\n";
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"capabilities\":{\n"
+	"      \"tasks\":{\n"
+	"        \"task\":[\n"
+	"          {\n"
+	"            \"name\":\"mtr\",\n"
+	"            \"function\":[\n"
+	"            ],\n"
+	"            \"version\":\"0.85\",\n"
+	"            \"program\":\"\\/usr\\/bin\\/mtr\"\n"
+	"          }\n"
+	"        ]\n"
+	"      }\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    xx_test_roundtrip_state_xml(a, x);
+    xx_test_roundtrip_state(a, x, ja, ja);
 }
 END_TEST
 
@@ -1504,8 +2015,29 @@ START_TEST(test_parser_state_schedules)
 	"    </lmapc:schedules>\n"
         "  </lmapc:lmap>\n"
         "</data>\n";
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"schedules\":{\n"
+	"      \"schedule\":[\n"
+	"        {\n"
+	"          \"name\":\"demo\",\n"
+	"          \"state\":\"enabled\",\n"
+	"          \"storage\":\"42\",\n"
+	"          \"invocations\":2,\n"
+	"          \"suppressions\":8,\n"
+	"          \"overlaps\":1,\n"
+	"          \"failures\":2,\n"
+	"          \"last-invocation\":\"2016-02-23T13:31:45+00:00\",\n"
+	"          \"action\":[\n"
+	"          ]\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    xx_test_roundtrip_state_xml(a, x);
+    xx_test_roundtrip_state(a, x, ja, ja);
 }
 END_TEST
 
@@ -1589,8 +2121,54 @@ START_TEST(test_parser_state_actions)
 	"    </lmapc:schedules>\n"
         "  </lmapc:lmap>\n"
         "</data>\n";
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"schedules\":{\n"
+	"      \"schedule\":[\n"
+	"        {\n"
+	"          \"name\":\"demo\",\n"
+	"          \"state\":\"enabled\",\n"
+	"          \"storage\":\"0\",\n"
+	"          \"invocations\":0,\n"
+	"          \"suppressions\":0,\n"
+	"          \"overlaps\":0,\n"
+	"          \"failures\":0,\n"
+	"          \"action\":[\n"
+	"            {\n"
+	"              \"name\":\"mtr\",\n"
+	"              \"state\":\"enabled\",\n"
+	"              \"storage\":\"0\",\n"
+	"              \"invocations\":2,\n"
+	"              \"suppressions\":0,\n"
+	"              \"overlaps\":0,\n"
+	"              \"failures\":0,\n"
+	"              \"last-invocation\":\"2016-02-23T13:31:45+00:00\",\n"
+	"              \"last-completion\":\"2016-02-23T13:31:52+00:00\",\n"
+	"              \"last-status\":0\n"
+	"            },\n"
+	"            {\n"
+	"              \"name\":\"happy\",\n"
+	"              \"state\":\"enabled\",\n"
+	"              \"storage\":\"0\",\n"
+	"              \"invocations\":2,\n"
+	"              \"suppressions\":0,\n"
+	"              \"overlaps\":0,\n"
+	"              \"failures\":2,\n"
+	"              \"last-invocation\":\"2016-02-23T13:31:52+00:00\",\n"
+	"              \"last-completion\":\"2016-02-23T13:31:53+00:00\",\n"
+	"              \"last-status\":1,\n"
+	"              \"last-failed-completion\":\"2016-02-23T13:31:53+00:00\",\n"
+	"              \"last-failed-status\":1\n"
+	"            }\n"
+	"          ]\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    xx_test_roundtrip_state_xml(a, x);
+    xx_test_roundtrip_state(a, x, ja, ja);
 }
 END_TEST
 
@@ -1669,8 +2247,96 @@ START_TEST(test_parser_report)
 	"    </lmapr:result>\n"
 	"  </lmapr:report>\n"
 	"</rpc>\n";
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-report:report\":{\n"
+	"    \"date\":\"2016-12-25T16:33:02+00:00\",\n"
+	"    \"agent-id\":\"550e8400-e29b-41d4-a716-446655440000\",\n"
+	"    \"result\":[\n"
+	"      {\n"
+	"        \"schedule\":\"demo\",\n"
+	"        \"action\":\"mtr-search-sites\",\n"
+	"        \"task\":\"mtr\",\n"
+	"        \"option\":[\n"
+	"          {\n"
+	"            \"id\":\"numeric\",\n"
+	"            \"name\":\"--no-dns\"\n"
+	"          },\n"
+	"          {\n"
+	"            \"id\":\"csv\",\n"
+	"            \"name\":\"--csv\"\n"
+	"          },\n"
+	"          {\n"
+	"            \"id\":\"lookup-AS-numbers\",\n"
+	"            \"name\":\"-z\"\n"
+	"          },\n"
+	"          {\n"
+	"            \"id\":\"one-cycle\",\n"
+	"            \"name\":\"--report-cycles\",\n"
+	"            \"value\":\"3\"\n"
+	"          },\n"
+	"          {\n"
+	"            \"id\":\"www.google.com\",\n"
+	"            \"value\":\"www.google.com\"\n"
+	"          }\n"
+	"        ],\n"
+	"        \"tag\":[\n"
+	"          \"task-mtr-tag\",\n"
+	"          \"schedule-demo-tag\"\n"
+	"        ],\n"
+	"        \"event\":\"2016-12-20T09:16:30+00:00\",\n"
+	"        \"start\":\"2016-12-20T09:16:30+00:00\",\n"
+	"        \"end\":\"2016-12-20T09:16:38+00:00\",\n"
+	"        \"cycle-number\":\"20161220.081700\",\n"
+	"        \"status\":0,\n"
+	"        \"table\":[\n"
+	"          {\n"
+	"            \"row\":[\n"
+	"              {\n"
+	"                \"value\":[\n"
+	"                  \"MTR.0.85\",\n"
+	"                  \"1482221851\",\n"
+	"                  \"OK\",\n"
+	"                  \"www.google.com\",\n"
+	"                  \"1\",\n"
+	"                  \"178.254.52.1\",\n"
+	"                  \"AS42730\",\n"
+	"                  \"1883\"\n"
+	"                ]\n"
+	"              },\n"
+	"              {\n"
+	"                \"value\":[\n"
+	"                  \"MTR.0.85\",\n"
+	"                  \"1482221851\",\n"
+	"                  \"OK\",\n"
+	"                  \"www.google.com\",\n"
+	"                  \"2\",\n"
+	"                  \"178.254.16.29\",\n"
+	"                  \"AS42730\",\n"
+	"                  \"425\"\n"
+	"                ]\n"
+	"              },\n"
+	"              {\n"
+	"                \"value\":[\n"
+	"                  \"MTR.0.85\",\n"
+	"                  \"1482221851\",\n"
+	"                  \"OK\",\n"
+	"                  \"www.google.com\",\n"
+	"                  \"12\",\n"
+	"                  \"216.58.213.228\",\n"
+	"                  \"AS15169\",\n"
+	"                  \"14173\"\n"
+	"                ]\n"
+	"              }\n"
+	"            ]\n"
+	"          }\n"
+	"        ]\n"
+	"      }\n"
+	"    ]\n"
+	"  }\n"
+	"}";
 
-    xx_test_roundtrip_report_xml(a, a);
+    xx_test_roundtrip_report(a, a, ja, ja);
 }
 END_TEST
 
