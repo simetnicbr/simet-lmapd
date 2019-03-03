@@ -1537,6 +1537,17 @@ parse_table(xmlNodePtr table_node)
 	if (!xmlStrcmp(node->name, BAD_CAST "row")) {
 	    struct row *row = parse_row(node);
 	    lmap_table_add_row(tab, row);
+	} else if (!xmlStrcmp(node->name, BAD_CAST "column")) {
+	    xmlChar *content = xmlNodeGetContent(node);
+	    lmap_table_add_column(tab, (char *) content);
+	    if (content) {
+		xmlFree(content);
+	    }
+	} else if ((!xmlStrcmp(node->name, BAD_CAST "function"))) {
+	    struct registry *registries = parse_registry(node, PARSE_CONFIG_TRUE);
+	    lmap_table_add_registry(tab, registries);
+	} else {
+	    lmap_wrn("unexpected element '%s'", node->name);
 	}
     }
     return tab;

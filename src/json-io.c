@@ -1248,15 +1248,32 @@ parse_config_doc(struct lmap *lmap, json_object *root)
  * report
  */
 
-/* FIXME: unimplemented in lmapd */
 static int
-xx_lrst_function(void *p, json_object *ctx, int unused)
-{ lmap_wrn("table function list not implemented yet"); return 0; }
+xx_lrst_function(void *p, json_object *ctx, int what)
+{
+    struct table *tab = p;
+    struct registry *registry;
+    int res = -1;
 
-/* FIXME: unimplemented in lmapd */
+    registry = parse_registry(ctx, what);
+    if (registry)
+	res = lmap_table_add_registry(tab, registry);
+
+    return res;
+}
+
 static int
-xx_lrst_column(void *p, json_object *ctx, int unused)
-{ lmap_wrn("table column list not implemented yet"); return 0; }
+xx_lrst_column(void *p, json_object *ctx, int what)
+{
+    struct table *tab = p;
+
+    UNUSED(what);
+
+    if (!json_object_is_type(ctx, json_type_string))
+	return -1;
+
+    return lmap_table_add_column(tab, json_object_get_string(ctx));
+}
 
 static int
 parse_report_result_table_value(void *p, const char *s)
