@@ -2026,6 +2026,27 @@ render_options(struct option *options, json_object *jobj)
 }
 
 static void
+render_registries(struct registry *registries, json_object *jobj)
+{
+    json_object *ja, *jf;
+    struct registry *r;
+
+    ja = json_object_new_array();
+    if (!ja)
+	return;
+    json_object_object_add(jobj, "function", ja);
+
+    for (r = registries; r; r = r->next) {
+	jf = json_object_new_object();
+	if (!jf)
+	    return;
+	json_object_array_add(ja, jf);
+	render_leaf(jf, "uri", r->uri);
+	render_tags(r->roles, "role", jf);
+    }
+}
+
+static void
 render_agent_report(struct agent *agent, json_object *jobj)
 {
     if (! agent) {
@@ -2174,27 +2195,6 @@ render_agent(struct agent *agent, json_object *jobj, int what)
     }
 
     return 0;
-}
-
-static void
-render_registries(struct registry *registries, json_object *jobj)
-{
-    json_object *ja, *jf;
-    struct registry *r;
-
-    ja = json_object_new_array();
-    if (!ja)
-	return;
-    json_object_object_add(jobj, "function", ja);
-
-    for (r = registries; r; r = r->next) {
-	jf = json_object_new_object();
-	if (!jf)
-	    return;
-	json_object_array_add(ja, jf);
-	render_leaf(jf, "uri", r->uri);
-	render_tags(r->roles, "role", jf);
-    }
 }
 
 static void
