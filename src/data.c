@@ -2327,6 +2327,8 @@ void
 lmap_table_free(struct table *tab)
 {
     if (tab) {
+	lmap_value_free(tab->columns);
+	lmap_registry_free(tab->registries);
 	while (tab->rows) {
 	    struct row *row = tab->rows;
 	    tab->rows = row->next;
@@ -2336,19 +2338,95 @@ lmap_table_free(struct table *tab)
     }
 }
 
+static unsigned long int
+lmap_value_length(struct value *val)
+{
+    unsigned long int res = 0;
+    while (val) {
+	res++;
+	val = val->next;
+    }
+
+    return res;
+}
+
 int
 lmap_table_valid(struct lmap *lmap, struct table *tab)
 {
     struct row *row;
     int valid = 1;
+    unsigned long int num_columns = 0;
 
-    UNUSED(lmap);
+    if (tab->registries) {
+	valid &= lmap_registry_valid(lmap, tab->registries);
+    }
+
+    if (tab->columns) {
+	valid &= lmap_value_valid(lmap, tab->columns);
+	num_columns = lmap_value_length(tab->columns);
+    }
 
     for (row = tab->rows; row; row = row->next) {
 	valid &= lmap_row_valid(lmap, row);
+	if (num_columns) {
+	    valid &= (lmap_value_length(row->values) == num_columns);
+	} else {
+	    num_columns = lmap_value_length(row->values);
+	}
     }
 
     return valid;
+}
+
+int
+lmap_table_add_registry(struct table *tab, struct registry *registry)
+{
+    struct registry **tail = &tab->registries;
+    struct registry *cur;
+
+    if (! registry->uri) {
+	lmap_err("unnamed registry");
+	return -1;
+    }
+
+    while (*tail != NULL) {
+	cur = *tail;
+	if (cur) {
+	    if (! strcmp(cur->uri, registry->uri)) {
+		lmap_err("duplicate registry '%s'", registry->uri);
+		return -1;
+	    }
+	}
+	tail = &((*tail)->next);
+    }
+    *tail = registry;
+
+    return 0;
+}
+
+int
+lmap_table_add_column(struct table *tab, const char *value)
+{
+    struct value **tail;
+    int res;
+
+    if (!tab)
+	return -1;
+
+    tail = &tab->columns;
+    while (*tail)
+	tail = &((*tail)->next);
+
+    if (!((*tail) = lmap_value_new()))
+	return -1;
+
+    res = lmap_value_set_value((*tail), value);
+    if (res) {
+	lmap_value_free((*tail));
+	(*tail) = NULL;
+    }
+
+    return res;
 }
 
 int

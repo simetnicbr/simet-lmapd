@@ -537,14 +537,45 @@ START_TEST(test_lmap_table)
 {
     struct row *row;
     struct value *val;
+    struct registry *reg;
 
     struct table *tab = lmap_table_new();
+
+    /* an empty table is valid */
+    ck_assert_int_eq(lmap_table_valid(NULL, tab), 1);
+
+    /* a table with only rows is valid */
     row = lmap_row_new();
     val = lmap_value_new();
     lmap_value_set_value(val, "42");
     lmap_row_add_value(row, val);
     lmap_table_add_row(tab, row);
     ck_assert_int_eq(lmap_table_valid(NULL, tab), 1);
+
+    /* the number of row contents and columns must match */
+    lmap_table_add_column(tab, "column0");
+    ck_assert_int_eq(lmap_table_valid(NULL, tab), 1);
+    lmap_table_add_column(tab, "column1");
+    ck_assert_int_eq(lmap_table_valid(NULL, tab), 0);
+    val = lmap_value_new();
+    lmap_value_set_value(val, "42");
+    lmap_row_add_value(row, val); /* yeah. not nice */
+    ck_assert_int_eq(lmap_table_valid(NULL, tab), 1);
+
+    /* only accept registry entries with an uri */
+    reg = lmap_registry_new();
+    lmap_registry_add_role(reg, "foo");
+    ck_assert_int_ne(lmap_table_add_registry(tab, reg), 0);
+    lmap_registry_set_uri(reg, "uri:example");
+    ck_assert_int_eq(lmap_table_add_registry(tab, reg), 0);
+    /* must refuse duplicate registry entries (same uri) */
+    reg = lmap_registry_new();
+    lmap_registry_add_role(reg, "bar");
+    lmap_registry_set_uri(reg, "uri:example");
+    ck_assert_int_ne(lmap_table_add_registry(tab, reg), 0);
+    lmap_registry_free(reg);
+    ck_assert_int_eq(lmap_table_valid(NULL, tab), 1);
+
     lmap_table_free(tab);
 }
 END_TEST
