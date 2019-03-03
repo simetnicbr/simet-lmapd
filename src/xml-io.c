@@ -1417,6 +1417,8 @@ parse_report(struct lmap *lmap, xmlXPathContextPtr ctx)
 	  .func = lmap_agent_set_group_id },
 	{ .name = "measurement-point",
 	  .func = lmap_agent_set_measurement_point },
+	{ .name = "result",
+	  .func = NULL },
 	{ .name = NULL, .func = NULL }
     };
 
