@@ -26,6 +26,8 @@
 #include "json-io.h"
 #include "csv.h"
 
+static const char testdata_dir[] = "test/data";
+
 static char last_error_msg[1024];
 
 static void vlog(int level, const char *func, const char *format, va_list args)
@@ -2412,10 +2414,40 @@ START_TEST(test_csv_key_value)
 }
 END_TEST
 
+START_TEST(test_load_config_xml)
+{
+    struct lmap *lmap;
+
+    lmap = lmap_new();
+    ck_assert_ptr_ne(lmap, NULL);
+
+    ck_assert_int_eq(lmap_xml_parse_config_path(lmap, testdata_dir), 0);
+    ck_assert_ptr_ne(lmap->agent, NULL);
+    ck_assert_int_eq(lmap_valid(lmap), 1);
+
+    lmap_free(lmap);
+}
+END_TEST
+
+START_TEST(test_load_config_json)
+{
+    struct lmap *lmap;
+
+    lmap = lmap_new();
+    ck_assert_ptr_ne(lmap, NULL);
+
+    ck_assert_int_eq(lmap_json_parse_config_path(lmap, testdata_dir), 0);
+    ck_assert_ptr_ne(lmap->agent, NULL);
+    ck_assert_int_eq(lmap_valid(lmap), 1);
+
+    lmap_free(lmap);
+}
+END_TEST
+
 Suite * lmap_suite(void)
 {
     Suite *s;
-    TCase *tc_core, *tc_parser, *tc_csv;
+    TCase *tc_core, *tc_parser, *tc_csv, *tc_file;
 
     s = suite_create("lmap");
 
@@ -2467,6 +2499,12 @@ Suite * lmap_suite(void)
     tcase_add_test(tc_csv, test_csv);
     tcase_add_test(tc_csv, test_csv_key_value);
     suite_add_tcase(s, tc_csv);
+
+    /* Other I/O test case */
+    tc_file = tcase_create("File I/O");
+    tcase_add_test(tc_file, test_load_config_xml);
+    tcase_add_test(tc_file, test_load_config_json);
+    suite_add_tcase(s, tc_file);
 
     return s;
 }

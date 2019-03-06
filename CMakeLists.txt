@@ -37,8 +37,8 @@ add_subdirectory(src)
 if(BUILD_TESTS AND BUILD_XML AND BUILD_JSON)
     add_subdirectory(test)
     enable_testing()
-    add_test(NAME lmap COMMAND check-lmap)
-    add_test(NAME lmapd COMMAND check-lmapd)
+    add_test(NAME lmap COMMAND check-lmap WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    add_test(NAME lmapd COMMAND check-lmapd WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 endif(BUILD_TESTS AND BUILD_XML AND BUILD_JSON)
 
 # source packages 'make package_source' or 'make dist'
