@@ -32,6 +32,14 @@
 #include <event2/event.h>
 
 /**
+ * A struct paths is used to hold a collection of paths
+ */
+struct paths {
+    char *path;
+    struct paths *next;
+};
+
+/**
  * A struct lmapd is ued to hold information about the lmapd daemon
  * itself that is not part of the data model (that is all internal
  * information that is not visible outside).
@@ -39,8 +47,8 @@
 
 struct lmapd {
     struct lmap *lmap;
-    
-    char *config_path;
+
+    struct paths *config_paths;
     char *capability_path;
     char *queue_path;
     char *run_path;
@@ -53,7 +61,8 @@ struct lmapd {
 
 extern struct lmapd * lmapd_new();
 extern void lmapd_free(struct lmapd *lmapd);
-extern int lmapd_set_config_path(struct lmapd *lmapd, const char *value);
+extern void lmapd_flush_config_paths(struct lmapd *lmapd);
+extern int lmapd_add_config_path(struct lmapd *lmapd, const char *value);
 extern int lmapd_set_capability_path(struct lmapd *lmapd, const char *value);
 extern int lmapd_set_queue_path(struct lmapd *lmapd, const char *value);
 extern int lmapd_set_run_path(struct lmapd *lmapd, const char *value);

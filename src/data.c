@@ -2144,11 +2144,30 @@ lmapd_new(void)
 }
 
 void
+lmapd_flush_config_paths(struct lmapd *lmapd)
+{
+    struct paths *paths = NULL;
+
+    if (lmapd) {
+	paths = lmapd->config_paths;
+
+	while(paths) {
+	    struct paths *old = paths;
+	    paths = paths->next;
+
+	    xfree(old->path);
+	    xfree(old);
+	}
+	lmapd->config_paths = NULL;
+    }
+}
+
+void
 lmapd_free(struct lmapd *lmapd)
 {
     if (lmapd) {
 	lmap_free(lmapd->lmap);
-	xfree(lmapd->config_path);
+	lmapd_flush_config_paths(lmapd);
 	xfree(lmapd->queue_path);
 	xfree(lmapd->run_path);
 	xfree(lmapd);
@@ -2156,12 +2175,30 @@ lmapd_free(struct lmapd *lmapd)
 }
 
 int
-lmapd_set_config_path(struct lmapd *lmapd, const char *value)
+lmapd_add_config_path(struct lmapd *lmapd, const char *value)
 {
     struct stat sb;
 
-    if (!stat(value, &sb) && (S_ISREG(sb.st_mode) || S_ISDIR(sb.st_mode)))
-	return set_string(&lmapd->config_path, value, __FUNCTION__);
+    if (value && !stat(value, &sb) && (S_ISREG(sb.st_mode) || S_ISDIR(sb.st_mode))) {
+	struct paths **tail = &(lmapd->config_paths);
+
+	while (*tail)
+	    tail = &((*tail)->next);
+
+	(*tail) = xcalloc(1, sizeof(struct paths), __FUNCTION__);
+	if (*tail) {
+	    (*tail)->path = strdup(value);
+	    (*tail)->next = NULL;
+	}
+	if (!(*tail) || !(*tail)->path) {
+	    xfree(*tail);
+	    *tail = NULL;
+	    lmap_log(LOG_ERR, __FUNCTION__,  "failed to allocate memory");
+	    return -1;
+	}
+
+	return 0;
+    }
 
     lmap_err("invalid config path or file '%s'", value);
     return -1;

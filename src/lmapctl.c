@@ -223,15 +223,21 @@ render_uint32(uint32_t num)
 static int
 read_config(struct lmapd *lmapd)
 {
+    struct paths *paths;
+
     lmapd->lmap = lmap_new();
     if (! lmapd->lmap) {
 	return -1;
     }
 
-    if (lmap_io_parse_config_path(lmapd->lmap, lmapd->config_path)) {
-	lmap_free(lmapd->lmap);
-	lmapd->lmap = NULL;
-	return -1;
+    paths = lmapd->config_paths;
+    while (paths && paths->path) {
+	if (lmap_io_parse_config_path(lmapd->lmap, paths->path)) {
+	    lmap_free(lmapd->lmap);
+	    lmapd->lmap = NULL;
+	    return -1;
+	}
+	paths = paths->next;
     }
 
     return 0;
@@ -665,9 +671,17 @@ int
 main(int argc, char *argv[])
 {
     int i, opt;
-    char *config_path = NULL;
     char *queue_path = NULL;
     char *run_path = NULL;
+
+    lmap_set_log_handler(vlog);
+
+    lmapd = lmapd_new();
+    if (! lmapd) {
+	exit(EXIT_FAILURE);
+    }
+
+    atexit(atexit_cb);
 
     while ((opt = getopt(argc, argv, "q:c:r:C:hjx")) != -1) {
 	switch (opt) {
@@ -675,7 +689,8 @@ main(int argc, char *argv[])
 	    queue_path = optarg;
 	    break;
 	case 'c':
-	    config_path = optarg;
+	    if (lmapd_add_config_path(lmapd, optarg))
+		exit(EXIT_FAILURE);
 	    break;
 	case 'r':
 	    run_path = optarg;
@@ -707,27 +722,17 @@ main(int argc, char *argv[])
 	}
     }
 
-    lmap_set_log_handler(vlog);
-
-    lmapd = lmapd_new();
-    if (! lmapd) {
-	exit(EXIT_FAILURE);
-    }
-
-    atexit(atexit_cb);
-
     if (optind >= argc) {
 	lmap_err("expected command argument after options");
 	exit(EXIT_FAILURE);
     }
 
-    (void) lmapd_set_config_path(lmapd,
-				config_path ? config_path : LMAPD_CONFIG_DIR);
+    (void) lmapd_add_config_path(lmapd, LMAPD_CONFIG_DIR);
     (void) lmapd_set_queue_path(lmapd,
 				queue_path ? queue_path : LMAPD_QUEUE_DIR);
     (void) lmapd_set_run_path(lmapd,
 			      run_path ? run_path : LMAPD_RUN_DIR);
-    if (!lmapd->config_path || !lmapd->queue_path || !lmapd->run_path) {
+    if (!lmapd->config_paths || !lmapd->queue_path || !lmapd->run_path) {
 	exit(EXIT_FAILURE);
     }
 
