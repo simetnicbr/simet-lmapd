@@ -254,8 +254,20 @@ main(int argc, char *argv[])
 
     openlog("lmapd", LOG_PID | LOG_NDELAY, LOG_DAEMON);
 
-    if (! lmapd->config_paths && lmapd_add_config_path(lmapd, LMAPD_CONFIG_DIR))
-	exit(EXIT_FAILURE);
+    if (! lmapd->config_paths) {
+	char *p = strdup(LMAPD_CONFIG_DIR);
+
+	while(p && *p) {
+	    char *q = strchr(p, ':');
+	    if (q) {
+		*q = '\0';
+		q++;
+	    }
+	    if (lmapd_add_config_path(lmapd, p))
+		exit(EXIT_FAILURE);
+	    p = q;
+	}
+    }
 
     (void) lmapd_set_capability_path(lmapd,
 		capability_path ? capability_path : LMAPD_CAPABILITY_DIR);

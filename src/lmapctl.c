@@ -15,7 +15,7 @@
  * along with lmapd. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define _POSIX_C_SOURCE 200112L
+#define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -727,7 +727,21 @@ main(int argc, char *argv[])
 	exit(EXIT_FAILURE);
     }
 
-    (void) lmapd_add_config_path(lmapd, LMAPD_CONFIG_DIR);
+    if (! lmapd->config_paths) {
+	char *p = strdup(LMAPD_CONFIG_DIR);
+
+	while(p && *p) {
+	    char *q = strchr(p, ':');
+	    if (q) {
+		*q = '\0';
+		q++;
+	    }
+	    if (lmapd_add_config_path(lmapd, p))
+		exit(EXIT_FAILURE);
+	    p = q;
+	}
+    }
+
     (void) lmapd_set_queue_path(lmapd,
 				queue_path ? queue_path : LMAPD_QUEUE_DIR);
     (void) lmapd_set_run_path(lmapd,
