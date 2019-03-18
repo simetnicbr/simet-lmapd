@@ -23,7 +23,10 @@
 #include "lmap.h"
 #include "utils.h"
 #include "xml-io.h"
+#include "json-io.h"
 #include "csv.h"
+
+static const char testdata_dir[] = "test/data";
 
 static char last_error_msg[1024];
 
@@ -564,6 +567,95 @@ START_TEST(test_lmap_result)
 }
 END_TEST
 
+/*
+ * Roundtrip-style (parse-render-parse-render) test
+ *
+ * Document "b" should be exactly what the render would output
+ */
+typedef int (parser_func)(struct lmap *, const char *);
+typedef char *(render_func)(struct lmap *);
+
+static void xx_create_doc_and_roundtrip_test(struct lmap ** const plmap, char ** const pstr,
+	const char * const doc, parser_func* const parse, render_func * const render)
+{
+    char *str_a;
+    struct lmap *lmap_a = NULL;
+
+    lmap_a = lmap_new();
+    ck_assert_ptr_ne(lmap_a, NULL);
+    ck_assert_int_eq((* parse)(lmap_a, doc), 0);
+    str_a = (* render)(lmap_a);
+    ck_assert_ptr_ne(str_a, NULL);
+
+    if (plmap)
+	(*plmap) = lmap_a;
+    else
+	lmap_free(lmap_a);
+
+    if (pstr)
+	(*pstr) = str_a;
+    else
+	free(str_a);
+}
+
+static void xx_test_roundtrip(const char *doc1_a, const char *doc1_b,
+		const char *doc2_a, const char *doc2_b,
+		parser_func * const parse1, render_func * const render1,
+		parser_func * const parse2, render_func * const render2)
+{
+    char *str1_a = NULL, *str1_c = NULL, *str1_d = NULL;
+    char *str2_a = NULL, *str2_c = NULL, *str2_d = NULL;
+    struct lmap *lmap1_a = NULL, *lmap1_b = NULL;
+    struct lmap *lmap2_a = NULL, *lmap2_b = NULL;
+
+    xx_create_doc_and_roundtrip_test(&lmap1_a, &str1_a, doc1_a, parse1, render1);
+    xx_create_doc_and_roundtrip_test(&lmap1_b, &str1_c, str1_a, parse1, render1);
+    ck_assert_str_eq(str1_a, str1_c);
+    ck_assert_str_eq(str1_c, doc1_b);
+
+    xx_create_doc_and_roundtrip_test(&lmap2_a, &str2_a, doc2_a, parse2, render2);
+    xx_create_doc_and_roundtrip_test(&lmap2_b, &str2_c, str2_a, parse2, render2);
+    ck_assert_str_eq(str2_a, str2_c);
+    ck_assert_str_eq(str2_c, doc2_b);
+
+    /* cross-check data model contents */
+    str1_d = (* render1)(lmap2_a);
+    ck_assert_ptr_ne(str1_d, NULL);
+    ck_assert_str_eq(str1_a, str1_d);
+
+    str2_d = (* render2)(lmap1_a);
+    ck_assert_ptr_ne(str2_d, NULL);
+    ck_assert_str_eq(str2_a, str2_d);
+
+    lmap_free(lmap1_a); lmap_free(lmap1_b); lmap_free(lmap2_a); lmap_free(lmap2_b);
+    free(str1_a); free(str1_c); free(str1_d);
+    free(str2_a); free(str2_c); free(str2_d);
+}
+
+static void xx_test_roundtrip_config(const char *xml_a, const char *xml_b,
+			      const char *json_a, const char *json_b)
+{
+    xx_test_roundtrip(xml_a, xml_b, json_a, json_b,
+	lmap_xml_parse_config_string, lmap_xml_render_config,
+	lmap_json_parse_config_string, lmap_json_render_config);
+}
+
+static void xx_test_roundtrip_state(const char *xml_a, const char *xml_b,
+			      const char *json_a, const char *json_b)
+{
+    xx_test_roundtrip(xml_a, xml_b, json_a, json_b,
+	lmap_xml_parse_state_string, lmap_xml_render_state,
+	lmap_json_parse_state_string, lmap_json_render_state);
+}
+
+static void xx_test_roundtrip_report(const char *xml_a, const char *xml_b,
+			      const char *json_a, const char *json_b)
+{
+    xx_test_roundtrip(xml_a, xml_b, json_a, json_b,
+	lmap_xml_parse_report_string, lmap_xml_render_report,
+	lmap_json_parse_report_string, lmap_json_render_report);
+}
+
 START_TEST(test_parser_config_agent)
 {
     const char *a =
@@ -590,26 +682,22 @@ START_TEST(test_parser_config_agent)
         "    </lmapc:agent>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
+    const char *ja =
+	"{\"ietf-lmap-control:lmap\":{\"agent\":{\"report-agent-id\":true,\"report-group-id\":false,\n"
+	"\"report-measurement-point\": false,\n\n \"controller-timeout\": 42\n  } } }\n   \n";
+    const char *jx =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"agent\":{\n"
+	"      \"report-agent-id\":true,\n"
+	"      \"report-group-id\":false,\n"
+	"      \"report-measurement-point\":false,\n"
+	"      \"controller-timeout\":42\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapa, a), 0);
-    b = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapb, b), 0);
-    c = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_config(a, x, ja, jx);
 }
 END_TEST
 
@@ -645,26 +733,25 @@ START_TEST(test_parser_config_suppressions)
         "    </lmapc:suppressions>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
+    char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"suppressions\":{\n"
+	"      \"suppression\":[\n"
+	"        {\n"
+	"          \"name\":\"foo\",\n"
+	"          \"match\":[\n"
+	"            \"red\",\n"
+	"            \"blue\"\n"
+	"          ],\n"
+	"          \"stop-running\":true\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapa, a), 0);
-    b = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapb, b), 0);
-    c = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_config(a, x, ja, ja);
 }
 END_TEST
 
@@ -726,26 +813,44 @@ START_TEST(test_parser_config_tasks)
         "    </lmapc:tasks>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"tasks\":{\n"
+	"      \"task\":[\n"
+	"        {\n"
+	"          \"name\":\"foo\",\n"
+	"          \"function\":[\n"
+	"            {\n"
+	"              \"uri\":\"urn:example\",\n"
+	"              \"role\":[\n"
+	"                \"client\",\n"
+	"                \"server\"\n"
+	"              ]\n"
+	"            }\n"
+	"          ],\n"
+	"          \"program\":\"noop\",\n"
+	"          \"option\":[\n"
+	"            {\n"
+	"              \"id\":\"numeric\",\n"
+	"              \"name\":\"-n\"\n"
+	"            },\n"
+	"            {\n"
+	"              \"id\":\"target\",\n"
+	"              \"value\":\"www.example.com\"\n"
+	"            }\n"
+	"          ],\n"
+	"          \"tag\":[\n"
+	"            \"red\",\n"
+	"            \"blue\"\n"
+	"          ]\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapa, a), 0);
-    b = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapb, b), 0);
-    c = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_config(a, x, ja, ja);
 }
 END_TEST
 
@@ -837,26 +942,59 @@ START_TEST(test_parser_config_events)
         "    </lmapc:events>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"events\":{\n"
+	"      \"event\":[\n"
+	"        {\n"
+	"          \"name\":\"foo\"\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"periodic\",\n"
+	"          \"random-spread\":300000,\n"
+	"          \"periodic\":{\n"
+	"            \"interval\":4321,\n"
+	"            \"start\":\"2015-02-01T15:44:21+00:00\",\n"
+	"            \"end\":\"2015-03-01T00:00:00+00:00\"\n"
+	"          }\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"once\",\n"
+	"          \"one-off\":{\n"
+	"            \"time\":\"2015-02-01T15:44:21+00:00\"\n"
+	"          }\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"startup\",\n"
+	"          \"startup\":[\n"
+	"            null\n"
+	"          ]\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"immediate\",\n"
+	"          \"immediate\":[\n"
+	"            null\n"
+	"          ]\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"controller-lost\",\n"
+	"          \"controller-lost\":[\n"
+	"            null\n"
+	"          ]\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"controller-connected\",\n"
+	"          \"controller-connected\":[\n"
+	"            null\n"
+	"          ]\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapa, a), 0);
-    b = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapb, b), 0);
-    c = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_config(a, x, ja, ja);
 }
 END_TEST
 
@@ -926,26 +1064,65 @@ START_TEST(test_parser_config_events_calendar0)
         "    </lmapc:events>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"events\":{\n"
+	"      \"event\":[\n"
+	"        {\n"
+	"          \"name\":\"monthly\",\n"
+	"          \"calendar\":{\n"
+	"            \"month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-month\":[\n"
+	"              1\n"
+	"            ],\n"
+	"            \"day-of-week\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"hour\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"minute\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"second\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"timezone-offset\":\"+00:00\"\n"
+	"          }\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"weekly\",\n"
+	"          \"calendar\":{\n"
+	"            \"month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-week\":[\n"
+	"              \"monday\"\n"
+	"            ],\n"
+	"            \"hour\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"minute\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"second\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"timezone-offset\":\"-01:00\"\n"
+	"          }\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapa, a), 0);
-    b = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapb, b), 0);
-    c = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_config(a, x, ja, ja);
 }
 END_TEST
 
@@ -1015,26 +1192,65 @@ START_TEST(test_parser_config_events_calendar1)
         "    </lmapc:events>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"events\":{\n"
+	"      \"event\":[\n"
+	"        {\n"
+	"          \"name\":\"daily\",\n"
+	"          \"calendar\":{\n"
+	"            \"month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-week\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"hour\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"minute\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"second\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"timezone-offset\":\"+01:00\"\n"
+	"          }\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"hourly\",\n"
+	"          \"calendar\":{\n"
+	"            \"month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-week\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"hour\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"minute\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"second\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"timezone-offset\":\"-01:30\"\n"
+	"          }\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapa, a), 0);
-    b = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapb, b), 0);
-    c = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_config(a, x, ja, ja);
 }
 END_TEST
 
@@ -1110,26 +1326,68 @@ START_TEST(test_parser_config_events_calendar2)
         "    </lmapc:events>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"events\":{\n"
+	"      \"event\":[\n"
+	"        {\n"
+	"          \"name\":\"hourly-on-weekends\",\n"
+	"          \"calendar\":{\n"
+	"            \"month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-week\":[\n"
+	"              \"saturday\",\n"
+	"              \"sunday\"\n"
+	"            ],\n"
+	"            \"hour\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"minute\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"second\":[\n"
+	"              0\n"
+	"            ]\n"
+	"          }\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"once-every-six-hours\",\n"
+	"          \"calendar\":{\n"
+	"            \"month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-month\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"day-of-week\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"hour\":[\n"
+	"              0,\n"
+	"              6,\n"
+	"              12,\n"
+	"              18\n"
+	"            ],\n"
+	"            \"minute\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"second\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"end\":\"2014-09-29T22:00:00+00:00\"\n"
+	"          }\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapa, a), 0);
-    b = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapb, b), 0);
-    c = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_config(a, x, ja, ja);
 }
 END_TEST
 
@@ -1195,26 +1453,63 @@ START_TEST(test_parser_config_events_calendar3)
         "    </lmapc:events>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"events\":{\n"
+	"      \"event\":[\n"
+	"        {\n"
+	"          \"name\":\"dec-31-11.00\",\n"
+	"          \"calendar\":{\n"
+	"            \"month\":[\n"
+	"              \"december\"\n"
+	"            ],\n"
+	"            \"day-of-month\":[\n"
+	"              31\n"
+	"            ],\n"
+	"            \"day-of-week\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"hour\":[\n"
+	"              11\n"
+	"            ],\n"
+	"            \"minute\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"second\":[\n"
+	"              0\n"
+	"            ]\n"
+	"          }\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"jan-01-15.00\",\n"
+	"          \"calendar\":{\n"
+	"            \"month\":[\n"
+	"              \"january\"\n"
+	"            ],\n"
+	"            \"day-of-month\":[\n"
+	"              1\n"
+	"            ],\n"
+	"            \"day-of-week\":[\n"
+	"              \"*\"\n"
+	"            ],\n"
+	"            \"hour\":[\n"
+	"              15\n"
+	"            ],\n"
+	"            \"minute\":[\n"
+	"              0\n"
+	"            ],\n"
+	"            \"second\":[\n"
+	"              0\n"
+	"            ]\n"
+	"          }\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapa, a), 0);
-    b = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapb, b), 0);
-    c = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_config(a, x, ja, ja);
 }
 END_TEST
 
@@ -1291,26 +1586,57 @@ START_TEST(test_parser_config_schedules)
         "    </lmapc:schedules>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"schedules\":{\n"
+	"      \"schedule\":[\n"
+	"        {\n"
+	"          \"name\":\"foo\",\n"
+	"          \"action\":[\n"
+	"          ]\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"bar\",\n"
+	"          \"start\":\"now\",\n"
+	"          \"execution-mode\":\"sequential\",\n"
+	"          \"action\":[\n"
+	"          ]\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"baz\",\n"
+	"          \"start\":\"now\",\n"
+	"          \"end\":\"tomorrow\",\n"
+	"          \"execution-mode\":\"parallel\",\n"
+	"          \"action\":[\n"
+	"          ]\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"qux\",\n"
+	"          \"start\":\"now\",\n"
+	"          \"duration\":\"42\",\n"
+	"          \"execution-mode\":\"pipelined\",\n"
+	"          \"action\":[\n"
+	"          ]\n"
+	"        },\n"
+	"        {\n"
+	"          \"name\":\"tag\",\n"
+	"          \"start\":\"now\",\n"
+	"          \"tag\":[\n"
+	"            \"red\"\n"
+	"          ],\n"
+	"          \"suppression-tag\":[\n"
+	"            \"blue\"\n"
+	"          ],\n"
+	"          \"action\":[\n"
+	"          ]\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapa, a), 0);
-    b = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapb, b), 0);
-    c = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_config(a, x, ja, ja);
 }
 END_TEST
 
@@ -1380,26 +1706,44 @@ START_TEST(test_parser_config_actions)
         "    </lmapc:schedules>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"schedules\":{\n"
+	"      \"schedule\":[\n"
+	"        {\n"
+	"          \"name\":\"foo\",\n"
+	"          \"start\":\"now\",\n"
+	"          \"action\":[\n"
+	"            {\n"
+	"              \"name\":\"foo\"\n"
+	"            },\n"
+	"            {\n"
+	"              \"name\":\"bar\",\n"
+	"              \"option\":[\n"
+	"                {\n"
+	"                  \"id\":\"a\",\n"
+	"                  \"value\":\"v\"\n"
+	"                },\n"
+	"                {\n"
+	"                  \"id\":\"b\",\n"
+	"                  \"name\":\"n\"\n"
+	"                },\n"
+	"                {\n"
+	"                  \"id\":\"c\",\n"
+	"                  \"name\":\"n\",\n"
+	"                  \"value\":\"n\"\n"
+	"                }\n"
+	"              ]\n"
+	"            }\n"
+	"          ]\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapa, a), 0);
-    b = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_config_string(lmapb, b), 0);
-    c = lmap_xml_render_config(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_config(a, x, ja, ja);
 }
 END_TEST
 
@@ -1521,26 +1865,17 @@ START_TEST(test_parser_state_agent)
         "    </lmapc:agent>\n"
         "  </lmapc:lmap>\n"
         "</data>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"agent\":{\n"
+	"      \"agent-id\":\"550e8400-e29b-41d4-a716-446655440000\",\n"
+	"      \"last-started\":\"2016-02-21T21:13:40+00:00\"\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_state_string(lmapa, a), 0);
-    b = lmap_xml_render_state(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_state_string(lmapb, b), 0);
-    c = lmap_xml_render_state(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_state(a, x, ja, ja);
 }
 END_TEST
 
@@ -1571,26 +1906,21 @@ START_TEST(test_parser_state_capabilities)
         "    </lmapc:capabilities>\n"
         "  </lmapc:lmap>\n"
         "</data>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"capabilities\":{\n"
+	"      \"version\":\"lmap version 0.3\",\n"
+	"      \"tag\":[\n"
+	"        \"system:IPv4 Capable\",\n"
+	"        \"system:IPv4 Works\",\n"
+	"        \"system:IPv6 Capable\"\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_state_string(lmapa, a), 0);
-    b = lmap_xml_render_state(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_state_string(lmapb, b), 0);
-    c = lmap_xml_render_state(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_state(a, x, ja, ja);
 }
 END_TEST
 
@@ -1626,26 +1956,26 @@ START_TEST(test_parser_state_capability_tasks)
         "    </lmapc:capabilities>\n"
         "  </lmapc:lmap>\n"
         "</data>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"capabilities\":{\n"
+	"      \"tasks\":{\n"
+	"        \"task\":[\n"
+	"          {\n"
+	"            \"name\":\"mtr\",\n"
+	"            \"function\":[\n"
+	"            ],\n"
+	"            \"version\":\"0.85\",\n"
+	"            \"program\":\"\\/usr\\/bin\\/mtr\"\n"
+	"          }\n"
+	"        ]\n"
+	"      }\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_state_string(lmapa, a), 0);
-    b = lmap_xml_render_state(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_state_string(lmapb, b), 0);
-    c = lmap_xml_render_state(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_state(a, x, ja, ja);
 }
 END_TEST
 
@@ -1687,26 +2017,29 @@ START_TEST(test_parser_state_schedules)
 	"    </lmapc:schedules>\n"
         "  </lmapc:lmap>\n"
         "</data>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"schedules\":{\n"
+	"      \"schedule\":[\n"
+	"        {\n"
+	"          \"name\":\"demo\",\n"
+	"          \"state\":\"enabled\",\n"
+	"          \"storage\":\"42\",\n"
+	"          \"invocations\":2,\n"
+	"          \"suppressions\":8,\n"
+	"          \"overlaps\":1,\n"
+	"          \"failures\":2,\n"
+	"          \"last-invocation\":\"2016-02-23T13:31:45+00:00\",\n"
+	"          \"action\":[\n"
+	"          ]\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_state_string(lmapa, a), 0);
-    b = lmap_xml_render_state(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_state_string(lmapb, b), 0);
-    c = lmap_xml_render_state(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_state(a, x, ja, ja);
 }
 END_TEST
 
@@ -1790,26 +2123,54 @@ START_TEST(test_parser_state_actions)
 	"    </lmapc:schedules>\n"
         "  </lmapc:lmap>\n"
         "</data>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-control:lmap\":{\n"
+	"    \"schedules\":{\n"
+	"      \"schedule\":[\n"
+	"        {\n"
+	"          \"name\":\"demo\",\n"
+	"          \"state\":\"enabled\",\n"
+	"          \"storage\":\"0\",\n"
+	"          \"invocations\":0,\n"
+	"          \"suppressions\":0,\n"
+	"          \"overlaps\":0,\n"
+	"          \"failures\":0,\n"
+	"          \"action\":[\n"
+	"            {\n"
+	"              \"name\":\"mtr\",\n"
+	"              \"state\":\"enabled\",\n"
+	"              \"storage\":\"0\",\n"
+	"              \"invocations\":2,\n"
+	"              \"suppressions\":0,\n"
+	"              \"overlaps\":0,\n"
+	"              \"failures\":0,\n"
+	"              \"last-invocation\":\"2016-02-23T13:31:45+00:00\",\n"
+	"              \"last-completion\":\"2016-02-23T13:31:52+00:00\",\n"
+	"              \"last-status\":0\n"
+	"            },\n"
+	"            {\n"
+	"              \"name\":\"happy\",\n"
+	"              \"state\":\"enabled\",\n"
+	"              \"storage\":\"0\",\n"
+	"              \"invocations\":2,\n"
+	"              \"suppressions\":0,\n"
+	"              \"overlaps\":0,\n"
+	"              \"failures\":2,\n"
+	"              \"last-invocation\":\"2016-02-23T13:31:52+00:00\",\n"
+	"              \"last-completion\":\"2016-02-23T13:31:53+00:00\",\n"
+	"              \"last-status\":1,\n"
+	"              \"last-failed-completion\":\"2016-02-23T13:31:53+00:00\",\n"
+	"              \"last-failed-status\":1\n"
+	"            }\n"
+	"          ]\n"
+	"        }\n"
+	"      ]\n"
+	"    }\n"
+	"  }\n"
+	"}";
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_state_string(lmapa, a), 0);
-    b = lmap_xml_render_state(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_state_string(lmapb, b), 0);
-    c = lmap_xml_render_state(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, x);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_state(a, x, ja, ja);
 }
 END_TEST
 
@@ -1879,96 +2240,6 @@ START_TEST(test_parser_report)
 	"          <lmapr:value>1482221851</lmapr:value>\n"
 	"          <lmapr:value>OK</lmapr:value>\n"
 	"          <lmapr:value>www.google.com</lmapr:value>\n"
-	"          <lmapr:value>3</lmapr:value>\n"
-	"          <lmapr:value>195.16.161.9</lmapr:value>\n"
-	"          <lmapr:value>AS3356</lmapr:value>\n"
-	"          <lmapr:value>853</lmapr:value>\n"
-	"        </lmapr:row>\n"
-	"        <lmapr:row>\n"
-	"          <lmapr:value>MTR.0.85</lmapr:value>\n"
-	"          <lmapr:value>1482221851</lmapr:value>\n"
-	"          <lmapr:value>OK</lmapr:value>\n"
-	"          <lmapr:value>www.google.com</lmapr:value>\n"
-	"          <lmapr:value>4</lmapr:value>\n"
-	"          <lmapr:value>\?\?\?</lmapr:value>\n"
-	"          <lmapr:value>AS\?\?\?</lmapr:value>\n"
-	"          <lmapr:value>0</lmapr:value>\n"
-	"        </lmapr:row>\n"
-	"        <lmapr:row>\n"
-	"          <lmapr:value>MTR.0.85</lmapr:value>\n"
-	"          <lmapr:value>1482221851</lmapr:value>\n"
-	"          <lmapr:value>OK</lmapr:value>\n"
-	"          <lmapr:value>www.google.com</lmapr:value>\n"
-	"          <lmapr:value>5</lmapr:value>\n"
-	"          <lmapr:value>207.46.36.73</lmapr:value>\n"
-	"          <lmapr:value>AS8075</lmapr:value>\n"
-	"          <lmapr:value>1104</lmapr:value>\n"
-	"        </lmapr:row>\n"
-	"        <lmapr:row>\n"
-	"          <lmapr:value>MTR.0.85</lmapr:value>\n"
-	"          <lmapr:value>1482221851</lmapr:value>\n"
-	"          <lmapr:value>OK</lmapr:value>\n"
-	"          <lmapr:value>www.google.com</lmapr:value>\n"
-	"          <lmapr:value>6</lmapr:value>\n"
-	"          <lmapr:value>104.44.80.147</lmapr:value>\n"
-	"          <lmapr:value>AS8075</lmapr:value>\n"
-	"          <lmapr:value>1160</lmapr:value>\n"
-	"        </lmapr:row>\n"
-	"        <lmapr:row>\n"
-	"          <lmapr:value>MTR.0.85</lmapr:value>\n"
-	"          <lmapr:value>1482221851</lmapr:value>\n"
-	"          <lmapr:value>OK</lmapr:value>\n"
-	"          <lmapr:value>www.google.com</lmapr:value>\n"
-	"          <lmapr:value>7</lmapr:value>\n"
-	"          <lmapr:value>72.14.234.10</lmapr:value>\n"
-	"          <lmapr:value>AS15169</lmapr:value>\n"
-	"          <lmapr:value>11300</lmapr:value>\n"
-	"        </lmapr:row>\n"
-	"        <lmapr:row>\n"
-	"          <lmapr:value>MTR.0.85</lmapr:value>\n"
-	"          <lmapr:value>1482221851</lmapr:value>\n"
-	"          <lmapr:value>OK</lmapr:value>\n"
-	"          <lmapr:value>www.google.com</lmapr:value>\n"
-	"          <lmapr:value>8</lmapr:value>\n"
-	"          <lmapr:value>209.85.244.61</lmapr:value>\n"
-	"          <lmapr:value>AS15169</lmapr:value>\n"
-	"          <lmapr:value>15424</lmapr:value>\n"
-	"        </lmapr:row>\n"
-	"        <lmapr:row>\n"
-	"          <lmapr:value>MTR.0.85</lmapr:value>\n"
-	"          <lmapr:value>1482221851</lmapr:value>\n"
-	"          <lmapr:value>OK</lmapr:value>\n"
-	"          <lmapr:value>www.google.com</lmapr:value>\n"
-	"          <lmapr:value>9</lmapr:value>\n"
-	"          <lmapr:value>72.14.233.166</lmapr:value>\n"
-	"          <lmapr:value>AS15169</lmapr:value>\n"
-	"          <lmapr:value>36363</lmapr:value>\n"
-	"        </lmapr:row>\n"
-	"        <lmapr:row>\n"
-	"          <lmapr:value>MTR.0.85</lmapr:value>\n"
-	"          <lmapr:value>1482221851</lmapr:value>\n"
-	"          <lmapr:value>OK</lmapr:value>\n"
-	"          <lmapr:value>www.google.com</lmapr:value>\n"
-	"          <lmapr:value>10</lmapr:value>\n"
-	"          <lmapr:value>204.79.197.200</lmapr:value>\n"
-	"          <lmapr:value>AS8068</lmapr:value>\n"
-	"          <lmapr:value>14508</lmapr:value>\n"
-	"        </lmapr:row>\n"
-	"        <lmapr:row>\n"
-	"          <lmapr:value>MTR.0.85</lmapr:value>\n"
-	"          <lmapr:value>1482221851</lmapr:value>\n"
-	"          <lmapr:value>OK</lmapr:value>\n"
-	"          <lmapr:value>www.google.com</lmapr:value>\n"
-	"          <lmapr:value>11</lmapr:value>\n"
-	"          <lmapr:value>204.79.197.200</lmapr:value>\n"
-	"          <lmapr:value>AS8068</lmapr:value>\n"
-	"          <lmapr:value>14176</lmapr:value>\n"
-	"        </lmapr:row>\n"
-	"        <lmapr:row>\n"
-	"          <lmapr:value>MTR.0.85</lmapr:value>\n"
-	"          <lmapr:value>1482221851</lmapr:value>\n"
-	"          <lmapr:value>OK</lmapr:value>\n"
-	"          <lmapr:value>www.google.com</lmapr:value>\n"
 	"          <lmapr:value>12</lmapr:value>\n"
 	"          <lmapr:value>216.58.213.228</lmapr:value>\n"
 	"          <lmapr:value>AS15169</lmapr:value>\n"
@@ -1978,26 +2249,96 @@ START_TEST(test_parser_report)
 	"    </lmapr:result>\n"
 	"  </lmapr:report>\n"
 	"</rpc>\n";
-    char *b, *c;
-    struct lmap *lmapa = NULL, *lmapb = NULL;
+    const char *ja =
+	"{\n"
+	"  \"ietf-lmap-report:report\":{\n"
+	"    \"date\":\"2016-12-25T16:33:02+00:00\",\n"
+	"    \"agent-id\":\"550e8400-e29b-41d4-a716-446655440000\",\n"
+	"    \"result\":[\n"
+	"      {\n"
+	"        \"schedule\":\"demo\",\n"
+	"        \"action\":\"mtr-search-sites\",\n"
+	"        \"task\":\"mtr\",\n"
+	"        \"option\":[\n"
+	"          {\n"
+	"            \"id\":\"numeric\",\n"
+	"            \"name\":\"--no-dns\"\n"
+	"          },\n"
+	"          {\n"
+	"            \"id\":\"csv\",\n"
+	"            \"name\":\"--csv\"\n"
+	"          },\n"
+	"          {\n"
+	"            \"id\":\"lookup-AS-numbers\",\n"
+	"            \"name\":\"-z\"\n"
+	"          },\n"
+	"          {\n"
+	"            \"id\":\"one-cycle\",\n"
+	"            \"name\":\"--report-cycles\",\n"
+	"            \"value\":\"3\"\n"
+	"          },\n"
+	"          {\n"
+	"            \"id\":\"www.google.com\",\n"
+	"            \"value\":\"www.google.com\"\n"
+	"          }\n"
+	"        ],\n"
+	"        \"tag\":[\n"
+	"          \"task-mtr-tag\",\n"
+	"          \"schedule-demo-tag\"\n"
+	"        ],\n"
+	"        \"event\":\"2016-12-20T09:16:30+00:00\",\n"
+	"        \"start\":\"2016-12-20T09:16:30+00:00\",\n"
+	"        \"end\":\"2016-12-20T09:16:38+00:00\",\n"
+	"        \"cycle-number\":\"20161220.081700\",\n"
+	"        \"status\":0,\n"
+	"        \"table\":[\n"
+	"          {\n"
+	"            \"row\":[\n"
+	"              {\n"
+	"                \"value\":[\n"
+	"                  \"MTR.0.85\",\n"
+	"                  \"1482221851\",\n"
+	"                  \"OK\",\n"
+	"                  \"www.google.com\",\n"
+	"                  \"1\",\n"
+	"                  \"178.254.52.1\",\n"
+	"                  \"AS42730\",\n"
+	"                  \"1883\"\n"
+	"                ]\n"
+	"              },\n"
+	"              {\n"
+	"                \"value\":[\n"
+	"                  \"MTR.0.85\",\n"
+	"                  \"1482221851\",\n"
+	"                  \"OK\",\n"
+	"                  \"www.google.com\",\n"
+	"                  \"2\",\n"
+	"                  \"178.254.16.29\",\n"
+	"                  \"AS42730\",\n"
+	"                  \"425\"\n"
+	"                ]\n"
+	"              },\n"
+	"              {\n"
+	"                \"value\":[\n"
+	"                  \"MTR.0.85\",\n"
+	"                  \"1482221851\",\n"
+	"                  \"OK\",\n"
+	"                  \"www.google.com\",\n"
+	"                  \"12\",\n"
+	"                  \"216.58.213.228\",\n"
+	"                  \"AS15169\",\n"
+	"                  \"14173\"\n"
+	"                ]\n"
+	"              }\n"
+	"            ]\n"
+	"          }\n"
+	"        ]\n"
+	"      }\n"
+	"    ]\n"
+	"  }\n"
+	"}";
 
-    lmapa = lmap_new();
-    ck_assert_ptr_ne(lmapa, NULL);
-    ck_assert_int_eq(lmap_xml_parse_report_string(lmapa, a), 0);
-    b = lmap_xml_render_report(lmapa);
-    ck_assert_ptr_ne(b, NULL);
-
-    lmapb = lmap_new();
-    ck_assert_ptr_ne(lmapb, NULL);
-    ck_assert_int_eq(lmap_xml_parse_report_string(lmapb, b), 0);
-    c = lmap_xml_render_report(lmapa);
-    ck_assert_ptr_ne(c, NULL);
-
-    ck_assert_str_eq(b, c);
-    ck_assert_str_eq(c, a);
-
-    lmap_free(lmapa); lmap_free(lmapb);
-    free(b); free(c);
+    xx_test_roundtrip_report(a, a, ja, ja);
 }
 END_TEST
 
@@ -2073,10 +2414,40 @@ START_TEST(test_csv_key_value)
 }
 END_TEST
 
+START_TEST(test_load_config_xml)
+{
+    struct lmap *lmap;
+
+    lmap = lmap_new();
+    ck_assert_ptr_ne(lmap, NULL);
+
+    ck_assert_int_eq(lmap_xml_parse_config_path(lmap, testdata_dir), 0);
+    ck_assert_ptr_ne(lmap->agent, NULL);
+    ck_assert_int_eq(lmap_valid(lmap), 1);
+
+    lmap_free(lmap);
+}
+END_TEST
+
+START_TEST(test_load_config_json)
+{
+    struct lmap *lmap;
+
+    lmap = lmap_new();
+    ck_assert_ptr_ne(lmap, NULL);
+
+    ck_assert_int_eq(lmap_json_parse_config_path(lmap, testdata_dir), 0);
+    ck_assert_ptr_ne(lmap->agent, NULL);
+    ck_assert_int_eq(lmap_valid(lmap), 1);
+
+    lmap_free(lmap);
+}
+END_TEST
+
 Suite * lmap_suite(void)
 {
     Suite *s;
-    TCase *tc_core, *tc_parser, *tc_csv;
+    TCase *tc_core, *tc_parser, *tc_csv, *tc_file;
 
     s = suite_create("lmap");
 
@@ -2128,6 +2499,12 @@ Suite * lmap_suite(void)
     tcase_add_test(tc_csv, test_csv);
     tcase_add_test(tc_csv, test_csv_key_value);
     suite_add_tcase(s, tc_csv);
+
+    /* Other I/O test case */
+    tc_file = tcase_create("File I/O");
+    tcase_add_test(tc_file, test_load_config_xml);
+    tcase_add_test(tc_file, test_load_config_json);
+    suite_add_tcase(s, tc_file);
 
     return s;
 }

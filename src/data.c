@@ -32,6 +32,7 @@
 #include "lmap.h"
 #include "lmapd.h"
 #include "utils.h"
+#include "lmap-io.h"
 
 #define UNUSED(x) (void)(x)
 
