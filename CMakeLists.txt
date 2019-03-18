@@ -8,6 +8,9 @@ option(BUILD_TESTS "Build test programs (requires JSON and XML support)" ON)
 option(BUILD_JSON  "Build with JSON support (requires json-c)" ON)
 option(BUILD_XML   "Build with XML support (requires libxml2)" ON)
 
+# Get some extra flexibility so that our defaults are less awkward
+include(GNUInstallDirs)
+
 # experimental code coverage stuff...
 #set(CMAKE_CXX_FLAGS "-g -O0 -Wall -fprofile-arcs -ftest-coverage")
 #set(CMAKE_C_FLAGS "-g -O0 -Wall -W -fprofile-arcs -ftest-coverage")

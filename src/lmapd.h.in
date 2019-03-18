@@ -21,17 +21,23 @@
 #define LMAPD_LMAPD		"@PROJECT_NAME@"
 #define LMAPD_LMAPCTL		"lmapctl"
 
-#define LMAPD_INSTALL_PREFIX	"@CMAKE_INSTALL_PREFIX@"
-#define LMAPD_CONFIG_DIR	"@CMAKE_INSTALL_PREFIX@/etc/lmapd/config"
-#define LMAPD_CAPABILITY_DIR	"@CMAKE_INSTALL_PREFIX@/etc/lmapd/capabilities"
-#define LMAPD_SPOOL_DIR		"@CMAKE_INSTALL_PREFIX@/var/spool/lmapd"
-#define LMAPD_QUEUE_DIR		"@CMAKE_INSTALL_PREFIX@/var/spool/lmapd/queue"
-#define LMAPD_RUN_DIR		"@CMAKE_INSTALL_PREFIX@/var/run"
+#define LMAPD_CONFIG_DIR	"@LMAPD_CONFIG_DIR@"
+#define LMAPD_CAPABILITY_DIR	"@LMAPD_CAPABILITY_DIR@"
+#define LMAPD_QUEUE_DIR		"@LMAPD_QUEUE_DIR@"
+#define LMAPD_RUN_DIR		"@LMAPD_RUN_DIR@"
 
 #define LMAPD_STATUS_FILE	"lmapd-state"
 #define LMAPD_PID_FILE		"lmapd.pid"
 
 #include <event2/event.h>
+
+/**
+ * A struct paths is used to hold a collection of paths
+ */
+struct paths {
+    char *path;
+    struct paths *next;
+};
 
 /**
  * A struct lmapd is ued to hold information about the lmapd daemon
@@ -41,8 +47,8 @@
 
 struct lmapd {
     struct lmap *lmap;
-    
-    char *config_path;
+
+    struct paths *config_paths;
     char *capability_path;
     char *queue_path;
     char *run_path;
@@ -55,7 +61,8 @@ struct lmapd {
 
 extern struct lmapd * lmapd_new();
 extern void lmapd_free(struct lmapd *lmapd);
-extern int lmapd_set_config_path(struct lmapd *lmapd, const char *value);
+extern void lmapd_flush_config_paths(struct lmapd *lmapd);
+extern int lmapd_add_config_path(struct lmapd *lmapd, const char *value);
 extern int lmapd_set_capability_path(struct lmapd *lmapd, const char *value);
 extern int lmapd_set_queue_path(struct lmapd *lmapd, const char *value);
 extern int lmapd_set_run_path(struct lmapd *lmapd, const char *value);

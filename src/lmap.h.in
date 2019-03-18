@@ -465,6 +465,8 @@ extern int lmap_result_set_cycle_number(struct result *res, const char *value);
 extern int lmap_result_set_status(struct result *res, const char *value);
   
 struct table {
+    struct registry *registries;
+    struct value *columns;
     struct row *rows;
     struct table *next;
 };
@@ -472,6 +474,8 @@ struct table {
 extern struct table * lmap_table_new();
 extern void lmap_table_free(struct table *tab);
 extern int lmap_table_valid(struct lmap *lmap, struct table *tab);
+extern int lmap_table_add_registry(struct table *tab, struct registry *registry);
+extern int lmap_table_add_column(struct table *tab, const char *value);
 extern int lmap_table_add_row(struct table *tab, struct row *row);
 
 struct row {

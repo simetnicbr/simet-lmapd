@@ -2144,11 +2144,30 @@ lmapd_new(void)
 }
 
 void
+lmapd_flush_config_paths(struct lmapd *lmapd)
+{
+    struct paths *paths = NULL;
+
+    if (lmapd) {
+	paths = lmapd->config_paths;
+
+	while(paths) {
+	    struct paths *old = paths;
+	    paths = paths->next;
+
+	    xfree(old->path);
+	    xfree(old);
+	}
+	lmapd->config_paths = NULL;
+    }
+}
+
+void
 lmapd_free(struct lmapd *lmapd)
 {
     if (lmapd) {
 	lmap_free(lmapd->lmap);
-	xfree(lmapd->config_path);
+	lmapd_flush_config_paths(lmapd);
 	xfree(lmapd->queue_path);
 	xfree(lmapd->run_path);
 	xfree(lmapd);
@@ -2156,12 +2175,30 @@ lmapd_free(struct lmapd *lmapd)
 }
 
 int
-lmapd_set_config_path(struct lmapd *lmapd, const char *value)
+lmapd_add_config_path(struct lmapd *lmapd, const char *value)
 {
     struct stat sb;
 
-    if (!stat(value, &sb) && (S_ISREG(sb.st_mode) || S_ISDIR(sb.st_mode)))
-	return set_string(&lmapd->config_path, value, __FUNCTION__);
+    if (value && !stat(value, &sb) && (S_ISREG(sb.st_mode) || S_ISDIR(sb.st_mode))) {
+	struct paths **tail = &(lmapd->config_paths);
+
+	while (*tail)
+	    tail = &((*tail)->next);
+
+	(*tail) = xcalloc(1, sizeof(struct paths), __FUNCTION__);
+	if (*tail) {
+	    (*tail)->path = strdup(value);
+	    (*tail)->next = NULL;
+	}
+	if (!(*tail) || !(*tail)->path) {
+	    xfree(*tail);
+	    *tail = NULL;
+	    lmap_log(LOG_ERR, __FUNCTION__,  "failed to allocate memory");
+	    return -1;
+	}
+
+	return 0;
+    }
 
     lmap_err("invalid config path or file '%s'", value);
     return -1;
@@ -2327,6 +2364,8 @@ void
 lmap_table_free(struct table *tab)
 {
     if (tab) {
+	lmap_value_free(tab->columns);
+	lmap_registry_free(tab->registries);
 	while (tab->rows) {
 	    struct row *row = tab->rows;
 	    tab->rows = row->next;
@@ -2336,19 +2375,95 @@ lmap_table_free(struct table *tab)
     }
 }
 
+static unsigned long int
+lmap_value_length(struct value *val)
+{
+    unsigned long int res = 0;
+    while (val) {
+	res++;
+	val = val->next;
+    }
+
+    return res;
+}
+
 int
 lmap_table_valid(struct lmap *lmap, struct table *tab)
 {
     struct row *row;
     int valid = 1;
+    unsigned long int num_columns = 0;
 
-    UNUSED(lmap);
+    if (tab->registries) {
+	valid &= lmap_registry_valid(lmap, tab->registries);
+    }
+
+    if (tab->columns) {
+	valid &= lmap_value_valid(lmap, tab->columns);
+	num_columns = lmap_value_length(tab->columns);
+    }
 
     for (row = tab->rows; row; row = row->next) {
 	valid &= lmap_row_valid(lmap, row);
+	if (num_columns) {
+	    valid &= (lmap_value_length(row->values) == num_columns);
+	} else {
+	    num_columns = lmap_value_length(row->values);
+	}
     }
 
     return valid;
+}
+
+int
+lmap_table_add_registry(struct table *tab, struct registry *registry)
+{
+    struct registry **tail = &tab->registries;
+    struct registry *cur;
+
+    if (! registry->uri) {
+	lmap_err("unnamed registry");
+	return -1;
+    }
+
+    while (*tail != NULL) {
+	cur = *tail;
+	if (cur) {
+	    if (! strcmp(cur->uri, registry->uri)) {
+		lmap_err("duplicate registry '%s'", registry->uri);
+		return -1;
+	    }
+	}
+	tail = &((*tail)->next);
+    }
+    *tail = registry;
+
+    return 0;
+}
+
+int
+lmap_table_add_column(struct table *tab, const char *value)
+{
+    struct value **tail;
+    int res;
+
+    if (!tab)
+	return -1;
+
+    tail = &tab->columns;
+    while (*tail)
+	tail = &((*tail)->next);
+
+    if (!((*tail) = lmap_value_new()))
+	return -1;
+
+    res = lmap_value_set_value((*tail), value);
+    if (res) {
+	lmap_value_free((*tail));
+	(*tail) = NULL;
+    }
+
+    return res;
 }
 
 int

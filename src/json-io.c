@@ -1248,15 +1248,32 @@ parse_config_doc(struct lmap *lmap, json_object *root)
  * report
  */
 
-/* FIXME: unimplemented in lmapd */
 static int
-xx_lrst_function(void *p, json_object *ctx, int unused)
-{ lmap_wrn("table function list not implemented yet"); return 0; }
+xx_lrst_function(void *p, json_object *ctx, int what)
+{
+    struct table *tab = p;
+    struct registry *registry;
+    int res = -1;
 
-/* FIXME: unimplemented in lmapd */
+    registry = parse_registry(ctx, what);
+    if (registry)
+	res = lmap_table_add_registry(tab, registry);
+
+    return res;
+}
+
 static int
-xx_lrst_column(void *p, json_object *ctx, int unused)
-{ lmap_wrn("table column list not implemented yet"); return 0; }
+xx_lrst_column(void *p, json_object *ctx, int what)
+{
+    struct table *tab = p;
+
+    UNUSED(what);
+
+    if (!json_object_is_type(ctx, json_type_string))
+	return -1;
+
+    return lmap_table_add_column(tab, json_object_get_string(ctx));
+}
 
 static int
 parse_report_result_table_value(void *p, const char *s)
@@ -2026,6 +2043,27 @@ render_options(struct option *options, json_object *jobj)
 }
 
 static void
+render_registries(struct registry *registries, json_object *jobj)
+{
+    json_object *ja, *jf;
+    struct registry *r;
+
+    ja = json_object_new_array();
+    if (!ja)
+	return;
+    json_object_object_add(jobj, "function", ja);
+
+    for (r = registries; r; r = r->next) {
+	jf = json_object_new_object();
+	if (!jf)
+	    return;
+	json_object_array_add(ja, jf);
+	render_leaf(jf, "uri", r->uri);
+	render_tags(r->roles, "role", jf);
+    }
+}
+
+static void
 render_agent_report(struct agent *agent, json_object *jobj)
 {
     if (! agent) {
@@ -2071,9 +2109,9 @@ render_row(struct row *row, json_object *jobj)
 static void
 render_table(struct table *tab, json_object *jobj)
 {
-    json_object *robj;
-    json_object *aobj;
+    json_object *robj, *aobj;
     struct row *row;
+    struct value *val;
 
     robj = json_object_new_object();
     if (! robj) {
@@ -2081,12 +2119,24 @@ render_table(struct table *tab, json_object *jobj)
     }
     json_object_array_add(jobj, robj);
 
+    if (tab->registries)
+        render_registries(tab->registries, robj);
+
+    if (tab->columns) {
+	if (!(aobj = json_object_new_array()))
+	    return;
+	json_object_object_add(robj, "column", aobj);
+	for (val = tab->columns; val; val = val->next) {
+	    json_object_array_add(aobj, json_object_new_string(val->value ? val->value : ""));
+	}
+    }
+
     aobj = json_object_new_array();
     if (! aobj) {
 	return;
     }
-
     json_object_object_add(robj, "row", aobj);
+
     for (row = tab->rows; row; row = row->next) {
 	render_row(row, aobj);
     }
@@ -2174,27 +2224,6 @@ render_agent(struct agent *agent, json_object *jobj, int what)
     }
 
     return 0;
-}
-
-static void
-render_registries(struct registry *registries, json_object *jobj)
-{
-    json_object *ja, *jf;
-    struct registry *r;
-
-    ja = json_object_new_array();
-    if (!ja)
-	return;
-    json_object_object_add(jobj, "function", ja);
-
-    for (r = registries; r; r = r->next) {
-	jf = json_object_new_object();
-	if (!jf)
-	    return;
-	json_object_array_add(ja, jf);
-	render_leaf(jf, "uri", r->uri);
-	render_tags(r->roles, "role", jf);
-    }
 }
 
 static void

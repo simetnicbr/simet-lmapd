@@ -1,6 +1,8 @@
 # So CMake can tell whether or not it can process this file
 cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
 
+include(GNUInstallDirs)
+
 find_package(Doxygen)
 option(BUILD_DOCUMENTATION "Create and install the HTML based API documentation (requires Doxygen)" ${DOXYGEN_FOUND})
 
@@ -22,5 +24,5 @@ if(BUILD_DOCUMENTATION)
         COMMENT "Generating API documentation with Doxygen"
         VERBATIM)
 
-    install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/html DESTINATION share/doc)
+    install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/html DESTINATION ${CMAKE_INSTALL_DOCDIR})
 endif(BUILD_DOCUMENTATION)

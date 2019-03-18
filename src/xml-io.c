@@ -1417,6 +1417,8 @@ parse_report(struct lmap *lmap, xmlXPathContextPtr ctx)
 	  .func = lmap_agent_set_group_id },
 	{ .name = "measurement-point",
 	  .func = lmap_agent_set_measurement_point },
+	{ .name = "result",
+	  .func = NULL },
 	{ .name = NULL, .func = NULL }
     };
 
@@ -1535,6 +1537,17 @@ parse_table(xmlNodePtr table_node)
 	if (!xmlStrcmp(node->name, BAD_CAST "row")) {
 	    struct row *row = parse_row(node);
 	    lmap_table_add_row(tab, row);
+	} else if (!xmlStrcmp(node->name, BAD_CAST "column")) {
+	    xmlChar *content = xmlNodeGetContent(node);
+	    lmap_table_add_column(tab, (char *) content);
+	    if (content) {
+		xmlFree(content);
+	    }
+	} else if ((!xmlStrcmp(node->name, BAD_CAST "function"))) {
+	    struct registry *registries = parse_registry(node, PARSE_CONFIG_TRUE);
+	    lmap_table_add_registry(tab, registries);
+	} else {
+	    lmap_wrn("unexpected element '%s'", node->name);
 	}
     }
     return tab;
@@ -2451,11 +2464,21 @@ static void
 render_table(struct table *tab, xmlNodePtr root, xmlNsPtr ns)
 {
     xmlNodePtr node;
+    struct registry *reg;
+    struct value *val;
     struct row *row;
 
     node = xmlNewChild(root, ns, BAD_CAST "table", NULL);
     if (!node) {
 	return;
+    }
+
+    for (reg = tab->registries; reg; reg = reg->next) {
+	render_registry(reg, node, ns);
+    }
+
+    for (val = tab->columns; val; val = val->next) {
+	render_leaf(node, ns, "column", val->value ? val->value : "");
     }
 
     for (row = tab->rows; row; row = row->next) {
