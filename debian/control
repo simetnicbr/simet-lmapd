@@ -1,0 +1,23 @@
+Source: simet-lmapd
+Section: net
+Priority: optional
+Maintainer: Equipe SIMET <medicoes@simet.nic.br>
+Build-Depends: debhelper (>= 9), cmake, pkg-config, libjson-c-dev, libevent-dev, libxml2-dev, check
+Standards-Version: 4.1.0
+Homepage: https://simet.nic.br/projetos/
+#Vcs-Browser: https://salsa.debian.org/debian/simet-ma
+#Vcs-Git: https://salsa.debian.org/debian/simet-ma.git
+
+Package: simet-lmapd
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: simet-ma
+Description: NIC.br SIMET Measurement Agent - LMAP core
+ This is the Measurement Agent for the SIMET system from NIC.br.  It
+ performs several measurements of the Internet connectivity against
+ SIMET measurement peers hosted at the IX.br Internet Exchanges as well
+ as in NIC.br datacenters, and reports the measurement results to the
+ SIMET central servers.
+ .
+ This package contains the LMAP core scheduler, which is a separate
+ source project based on the lmapd reference implementation.
