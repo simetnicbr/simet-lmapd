@@ -1,0 +1,40 @@
+#!/usr/bin/make -f
+# debian/rules for simet-lmapd
+# Copyright (c) 2018,2019 NIC.br
+# Published and distributed under the same license as the main work
+
+# Target: Debhelper v9, since we need to be compatible with Ubuntu 16.04 LTS
+# it is fine if we do better on newer, as long as the build works and produces
+# usable results on Ubuntu 16.04 LTS+, Debian 8+
+
+export DH_VERBOSE = 1
+
+# see FEATURE AREAS in dpkg-buildflags(1)
+# see ENVIRONMENT in dpkg-buildflags(1)
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export DEB_CFLAGS_MAINT_APPEND := -Wall -pipe
+
+# package maintainers to append LDFLAGS
+#export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
+
+%:
+	dh $@
+
+# This is example for Cmake (See https://bugs.debian.org/641051 )
+#	-DCMAKE_LIBRARY_PATH=$(DEB_HOST_MULTIARCH)
+
+# change configure options _and_ ensure bootstrap/retool
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		-DCMAKE_INSTALL_PREFIX=/opt/simet \
+		-DCMAKE_INSTALL_SYSCONFDIR=/opt/simet/etc \
+		-DCMAKE_INSTALL_LOCALSTATEDIR=/var \
+		-DCMAKE_BUILD_TYPE:STRING=RelWithDebInfo \
+		-DLMAPD_CONFIG_DIR:PATH="/opt/simet/lib/simet/lmap/config.d:/opt/simet/etc/simet/lmap:/var/run/lmapd/lmap-schedule.json" \
+		-DLMAPD_CAPABILITY_DIR:PATH="/opt/simet/lib/simet/lmap/registry.d" \
+		-DLMAPD_RUN_DIR:PATH="/var/run/lmapd" \
+		-DLMAPD_QUEUE_DIR:PATH="/opt/simet/lib/simet/lmap/queue"
+
+# ensure we always get the same behavior from dh_auto_install
+override_dh_auto_install:
+	dh_auto_install --destdir=debian/tmp

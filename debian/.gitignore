@@ -1,0 +1,6 @@
+simet-lmapd/
+tmp/
+files
+*.debhelper
+*.debhelper.log
+simet-lmapd.substvars
