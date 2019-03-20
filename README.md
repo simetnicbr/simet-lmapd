@@ -1,11 +1,19 @@
 # lmapd
-[![Build Status](https://travis-ci.org/schoenw/lmapd.svg?branch=master)](https://travis-ci.org/schoenw/lmapd)
-
 
 lmapd is the proof-of-concept daemon implementation for the Large-Scale Measurement Platforms (LMAP) information and data model developed by the [LMAP] working group of the [IETF]. The information model was published as [RFC8193] and the data model as [RFC8194].
 
+## simet-lmapd
+
+simet-lmapd is a fork from the proof-of-concept lmapd implementation, adding features needed by the SIMET2 project for production use.  We contribute those back to the reference lmapd implementation, and will resync to the upstream implementation should the features be accepted.
+
+The "merge back" contribution branches are those in the "for-upstream/" branch namespace of the simetnicbr/simet-lmapd project.
+
+### License
+
+The license of any changes and contributed code by NIC.br is the same as the upstream code.
+
 ### Version
-0.4.1
+0.4.1+simet0.10.0  (simet-lmapd fork 0.10.0)
 
 ### Dependencies
 
@@ -98,9 +106,10 @@ The following people have helped with suggestions and ideas:
 Development of this code was kindly supported by the EU FP7 [Leone] and
 [Flamingo] research projects.
 
-### License
+### Upstream License
 
 GPLv3
+(believed to be *SPDX-License-Identifier: GPL-3.0-or-later*, waiting for upstream clarification)
 
 [libevent]:http://libevent.org/
 [libxml2]:http://www.xmlsoft.org/
