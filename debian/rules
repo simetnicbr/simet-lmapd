@@ -33,7 +33,7 @@ override_dh_auto_configure:
 		-DLMAPD_CONFIG_DIR:PATH="/opt/simet/lib/simet/lmap/config.d:/opt/simet/etc/simet/lmap:/var/run/lmapd/lmap-schedule.json" \
 		-DLMAPD_CAPABILITY_DIR:PATH="/opt/simet/lib/simet/lmap/registry.d" \
 		-DLMAPD_RUN_DIR:PATH="/var/run/lmapd" \
-		-DLMAPD_QUEUE_DIR:PATH="/opt/simet/lib/simet/lmap/queue"
+		-DLMAPD_QUEUE_DIR:PATH="/var/spool/lmapd/queue"
 
 # ensure we always get the same behavior from dh_auto_install
 override_dh_auto_install:
