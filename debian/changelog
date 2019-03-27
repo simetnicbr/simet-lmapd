@@ -1,3 +1,11 @@
+simet-lmapd (0.12.0) unstable; urgency=medium
+
+  * simet-lmapd 0.12.0, based on lmapd 0.4.1
+  * Move queue directory to /var/spool/lmapd/queue
+  * Version sync with the simet-ma which needs this (0.12)
+
+ -- SIMET <medicoes@simet.nic.br>  Wed, 27 Mar 2019 08:51:50 -0300
+
 simet-lmapd (0.10.0) unstable; urgency=medium
 
   * simet-lmapd 0.10.0, based on lmapd 0.4.1
