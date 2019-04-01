@@ -23,6 +23,8 @@
 #include <string.h>
 #include <sys/types.h>
 #include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <ftw.h>
 #include <signal.h>
 #include <limits.h>
@@ -37,13 +39,21 @@
 #include "csv.h"
 #include "workspace.h"
 
+/* incoming schedule queue name, must start with _ */
+#define LMAPD_QUEUE_INCOMING_NAME "_incoming"
+
 static const char delimiter = ';';
 
 /**
  * @brief Create a safe filesystem name
  *
  * Creates a safe filesystem name. Unsafe characters are %-encoded if
- * necessary.
+ * necessary.  It ensures the filename does not start with [._] to
+ * avoid creating hidden files, and to give lmapd a private namespace
+ * to work with (anything starting with "_").
+ *
+ * Note: as a side-effect, does not allow filenames to start with a
+ * few other characters, either, and will %-escape them instead.
  *
  * @param name file system name
  * @return pointer to a safe filesystem name (static buffer)
@@ -58,7 +68,7 @@ mksafe(const char *name)
     static char save_name[NAME_MAX];
 
     for (i = 0, j = 0; name[i] && j < NAME_MAX-1; i++) {
-	if (isalnum(name[i]) || strchr(safe, name[i])) {
+	if (isalnum(name[i]) || (i > 0 && strchr(safe, name[i]))) {
 	    save_name[j++] = name[i];
 	} else {
 	    /* %-escape the char if there is enough space left */
@@ -224,6 +234,168 @@ lmapd_workspace_update(struct lmapd *lmapd)
 }
 
 /**
+ * @brief Clean the workspace of an schedule
+ *
+ * Function to clean the workspace of an schedule, by removing
+ * the processing queue (all files in the base schedule directory),
+ * it leaves directories and files starting with "_" untouched.
+ *
+ * @param lmapd pointer to the struct lmapd
+ * @param schedule pointer to the struct schedule
+ * @return 0 on success, -1 on error
+ */
+int
+lmapd_workspace_schedule_clean(struct lmapd *lmapd, struct schedule *schedule)
+{
+    int ret = 0;
+    struct dirent *dp;
+    struct stat st;
+    DIR *dfd;
+
+    assert(lmapd);
+    (void) lmapd;
+
+    if (!schedule || !schedule->workspace) {
+	return 0;
+    }
+
+    dfd = opendir(schedule->workspace);
+    if (!dfd) {
+	lmap_err("failed to open directory '%s'", schedule->workspace);
+	return -1;
+    }
+
+    while ((dp = readdir(dfd)) != NULL) {
+	if (dp->d_name[0] == '_') {
+	    continue;
+	}
+	if (fstatat(dirfd(dfd), dp->d_name, &st, AT_SYMLINK_NOFOLLOW)
+		|| st.st_mode & S_IFDIR) {
+	    continue;
+	}
+	if (unlinkat(dirfd(dfd), dp->d_name, 0)) {
+	    lmap_err("failed to remove '%s/%s'", schedule->workspace, dp->d_name);
+	    ret = -1;
+	}
+    }
+    (void) closedir(dfd);
+
+    return ret;
+}
+
+/**
+ * @brief Move the workspace incoming queue of an schedule
+ *
+ * Function to move the contents of the incoming special
+ * queue of an schedule to the active input queue.
+ *
+ * Only complete queue entries (i.e. those with both .data
+ * and .meta files) are moved.
+ *
+ * @param lmapd pointer to the struct lmapd
+ * @param schedule pointer to the struct schedule
+ * @return 0 on success, -1 on error
+ */
+
+int
+lmapd_workspace_schedule_move(struct lmapd *lmapd, struct schedule *schedule)
+{
+    int ret = -1;
+    char oldfilepath[PATH_MAX];
+    struct dirent *dp;
+    DIR *dfd;
+
+    int dirfd_dest = -1;
+    char *sdata = NULL, *s;
+
+    assert(lmapd);
+    (void) lmapd;
+
+    if (!schedule || !schedule->workspace) {
+	return 0;
+    }
+
+    const char * const newfilepath = schedule->workspace;
+
+    errno = 0;
+    do {
+	dirfd_dest = open(newfilepath, O_DIRECTORY | O_RDONLY);
+    } while (dirfd_dest == -1 && (errno == EAGAIN || errno == EINTR));
+    if (dirfd_dest == -1) {
+	lmap_err("failed to open directory '%s': %s",
+		 newfilepath, strerror(errno));
+	return -1;
+    }
+
+    snprintf(oldfilepath, sizeof(oldfilepath), "%s/" LMAPD_QUEUE_INCOMING_NAME,
+	     schedule->workspace);
+    dfd = opendir(oldfilepath);
+    if (!dfd) {
+	lmap_err("failed to open directory '%s': %s",
+		 oldfilepath, strerror(errno));
+	goto err_exit;
+    }
+
+    sdata = NULL;
+    while ((dp = readdir(dfd)) != NULL) {
+	if (dp->d_name[0] == '.') {
+	    /* skip ., .., hidden files */
+	    continue;
+	}
+	/* is it the .meta file ? */
+	s = strrchr(dp->d_name, '.');
+	if (s && !strcmp(".meta", s)) {
+	    free(sdata);
+	    sdata = strdup(dp->d_name);
+	    if (!sdata)
+		break; /* abort scan */
+	    s = strrchr(sdata, '.');
+	    if (!s)
+		break; /* should *NEVER* happen */
+	    s++;
+	    strcpy(s, "data"); /* strlen("data") == strlen("meta") */
+
+	    /* "meta" *is* there, "data" might not be */
+	    if (linkat(dirfd(dfd), sdata, dirfd_dest, sdata, 0)) {
+		continue; /* data not there yet, skip this pair */
+	    }
+	    if (linkat(dirfd(dfd), dp->d_name, dirfd_dest, dp->d_name, 0)) {
+		lmap_err("failed to move %s from %s to %s: %s",
+			sdata, oldfilepath, newfilepath, strerror(errno));
+		/* rollback first linkat() */
+		if (unlinkat(dirfd_dest, sdata, 0))
+		    lmap_err("Could not rollback move of '%s/%s': %s",
+			    oldfilepath, sdata, strerror(errno));
+		break;
+	    }
+	    /* unlink from source dir to complete the move operation, do not
+	     * short-circuit -- if we unlink either one, we already avoid
+	     * double processing them */
+	    if (unlinkat(dirfd(dfd), dp->d_name, 0)) {
+		    lmap_wrn("failed to unlink %s from incoming queue: %s",
+			    dp->d_name, strerror(errno));
+	    }
+	    if (unlinkat(dirfd(dfd), sdata, 0)) {
+		    lmap_wrn("failed to unlink %s from incoming queue: %s",
+			    sdata, strerror(errno));
+	    }
+	}
+    }
+    ret = 0;
+
+err_exit:
+    free(sdata);
+    if (dfd) {
+	(void) closedir(dfd);
+    }
+    if (dirfd_dest != -1) {
+	(void) close(dirfd_dest);
+    }
+
+    return ret;
+}
+
+/**
  * @brief Clean the workspace of an action
  *
  * Function to clean the workspace of an action by removing everything
@@ -275,7 +447,8 @@ lmapd_workspace_action_clean(struct lmapd *lmapd, struct action *action)
  * @brief Move the workspace of an action
  *
  * Function to move the workspace of an action to a destination
- * schedule.
+ * schedule.  The action output files are moved to the destination
+ * schedule's incoming special folder.
  *
  * @param lmapd pointer to the struct lmapd
  * @param schedule pointer to the struct schedule
@@ -315,7 +488,7 @@ lmapd_workspace_action_move(struct lmapd *lmapd, struct schedule *schedule,
 	}
 	snprintf(oldfilepath, sizeof(oldfilepath), "%s/%s",
 		 action->workspace, dp->d_name);
-	snprintf(newfilepath, sizeof(newfilepath), "%s/%s",
+	snprintf(newfilepath, sizeof(newfilepath), "%s/" LMAPD_QUEUE_INCOMING_NAME "/%s",
 		 destination->workspace, dp->d_name);
 	if (link(oldfilepath, newfilepath) < 0) {
 	    lmap_err("failed to move '%s' to '%s'", oldfilepath, newfilepath);
@@ -332,7 +505,7 @@ lmapd_workspace_action_move(struct lmapd *lmapd, struct schedule *schedule,
  *
  * Function to create the workspace folders for schedules and their
  * actions. Actions store results before in their workspace sending
- * them to the destination schedule.
+ * them to the destination schedule's incoming special folder.
  *
  * @param lmapd pointer to struct lmapd
  * @return 0 on success, -1 on error
@@ -376,6 +549,14 @@ lmapd_workspace_init(struct lmapd *lmapd)
 		continue;
 	    }
 	    lmap_action_set_workspace(act, filepath);
+	}
+
+	/* create incoming directory */
+	snprintf(filepath, sizeof(filepath), "%s/" LMAPD_QUEUE_INCOMING_NAME,
+		sched->workspace);
+	if (mkdir(filepath, 0700) < 0 && errno != EEXIST) {
+	    lmap_err("failed to mkdir '%s'", filepath);
+	    ret = -1;
 	}
     }
 
