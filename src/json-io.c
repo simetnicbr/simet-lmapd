@@ -1731,6 +1731,13 @@ lmap_json_parse_report_string(struct lmap *lmap, const char *string)
     return parse_string(lmap, string, &parse_report_doc);
 }
 
+int
+lmap_json_parse_task_results_fd(int fd, struct result *result)
+{
+    /* FIXME: implement this */
+    lmap_err("parsing of structured task output in JSON not implemented yet!");
+    return -1;
+}
 
 /*
  * JSON output I/O and rendering/serializing

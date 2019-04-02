@@ -35,6 +35,6 @@ extern int lmapd_workspace_action_open_meta(struct schedule *schedule, struct ac
 extern int lmapd_workspace_action_meta_add_start(struct schedule *schedule, struct action *action, struct task *task);
 extern int lmapd_workspace_action_meta_add_end(struct schedule *schedule, struct action *action);
 
-extern int lmapd_workspace_read_results(struct lmapd *lmapd);
+extern int lmapd_workspace_read_results(struct lmapd *lmapd, const int filetype);
 
 #endif

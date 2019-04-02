@@ -35,6 +35,7 @@
 #include "lmapd.h"
 #include "utils.h"
 #include "csv.h"
+#include "lmap-io.h"
 #include "workspace.h"
 
 static const char delimiter = ';';
@@ -653,13 +654,15 @@ read_result(int fd)
 }
 
 int
-lmapd_workspace_read_results(struct lmapd *lmapd)
+lmapd_workspace_read_results(struct lmapd *lmapd, const int filetype)
 {
     char *p;
     struct dirent *dp;
     DIR *dfd;
     struct table *tab;
     struct result *res;
+
+    int rc = 0;
 
     dfd = opendir(".");
     if (!dfd) {
@@ -676,32 +679,46 @@ lmapd_workspace_read_results(struct lmapd *lmapd)
 	    continue;
 	}
 
+	/* note: security issue if len("meta") != len("data") */
 	if (!strcmp(p, ".meta")) {
-	    int mfd, dfd;
+	    int mfd, datafd;
 	    mfd = open(dp->d_name, O_RDONLY);
 	    if (mfd == -1) {
 		lmap_err("failed to open meta file '%s': %s",
 			 dp->d_name, strerror(errno));
+		rc = -1;
 		continue;
 	    }
 	    strcpy(p, ".data");
-	    dfd = open(dp->d_name, O_RDONLY);
-	    if (dfd == -1) {
+	    datafd = open(dp->d_name, O_RDONLY);
+	    if (datafd == -1) {
 		lmap_err("failed to open data file '%s': %s",
 			 dp->d_name, strerror(errno));
 		(void) close(mfd);
+		rc = -1;
 		continue;
 	    }
 	    res = read_result(mfd);
 	    if (res) {
 		lmap_add_result(lmapd->lmap, res);
-		tab = read_table(dfd);
-		if (tab) {
-		    lmap_result_add_table(res, tab);
+		if (filetype == LMAP_FT_CSV) {
+		    tab = read_table(datafd);
+		    if (tab) {
+			lmap_result_add_table(res, tab);
+		    } else {
+			rc = -1;
+		    }
+		} else {
+		    if (lmap_io_parse_task_results_fd(datafd, filetype, res)) {
+			lmap_err("failed to read data file '%s'", dp->d_name);
+			rc = -1;
+		    }
 		}
 	    }
+	    (void) close(mfd);
+	    (void) close(datafd);
 	}
     }
     (void) closedir(dfd);
-    return 0;
+    return rc;
 }
