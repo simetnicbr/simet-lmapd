@@ -1845,6 +1845,9 @@ render_leaf_days_of_month(json_object *jobj, char *name, uint32_t days_of_month)
     int i;
     json_object *ja;
 
+    if (!days_of_month)
+	return;
+
     ja = json_object_new_array();
     if (!ja)
 	return;
@@ -1886,6 +1889,9 @@ render_leaf_months(json_object *jobj, char *name, uint16_t months)
 	{ NULL, 0 }
     };
 
+    if (!months)
+	return;
+
     ja = json_object_new_array();
     if (!ja)
 	return;
@@ -1922,6 +1928,9 @@ render_leaf_days_of_week(json_object *jobj, char *name, uint8_t days_of_week)
 	{ NULL, 0 }
     };
 
+    if (!days_of_week)
+	return;
+
     ja = json_object_new_array();
     if (!ja)
 	return;
@@ -1945,6 +1954,9 @@ render_leaf_hours(json_object *jobj, char *name, uint32_t hours)
     int i;
     json_object *ja;
 
+    if (!hours)
+	return;
+
     ja = json_object_new_array();
     if (!ja)
 	return;
@@ -1967,6 +1979,9 @@ render_leaf_minsecs(json_object *jobj, char *name, uint64_t minsecs)
 {
     int i;
     json_object *ja;
+
+    if (!minsecs)
+	return;
 
     ja = json_object_new_array();
     if (!ja)
@@ -2048,6 +2063,9 @@ render_registries(struct registry *registries, json_object *jobj)
     json_object *ja, *jf;
     struct registry *r;
 
+    if (!registries)
+	return;
+
     ja = json_object_new_array();
     if (!ja)
 	return;
@@ -2095,6 +2113,11 @@ render_row(struct row *row, json_object *jobj)
     }
     json_object_array_add(jobj, robj);
 
+    /* empty row, leave the object empty */
+    if (!row || !row->values) {
+	return;
+    }
+
     aobj = json_object_new_array();
     if (!aobj) {
 	return;
@@ -2119,6 +2142,11 @@ render_table(struct table *tab, json_object *jobj)
     }
     json_object_array_add(jobj, robj);
 
+    /* empty table: leave the object empty */
+    if (!tab) {
+	return;
+    }
+
     if (tab->registries)
         render_registries(tab->registries, robj);
 
@@ -2131,14 +2159,16 @@ render_table(struct table *tab, json_object *jobj)
 	}
     }
 
-    aobj = json_object_new_array();
-    if (! aobj) {
-	return;
-    }
-    json_object_object_add(robj, "row", aobj);
+    if (tab->rows) {
+	aobj = json_object_new_array();
+	if (! aobj) {
+	    return;
+	}
 
-    for (row = tab->rows; row; row = row->next) {
-	render_row(row, aobj);
+	json_object_object_add(robj, "row", aobj);
+	for (row = tab->rows; row; row = row->next) {
+	    render_row(row, aobj);
+	}
     }
 }
 
@@ -2181,11 +2211,13 @@ render_result(struct result *res, json_object *jobj)
 	render_leaf_int32(robj, "status", res->status);
     }
 
-    aobj = json_object_new_array();
-    if (aobj) {
-	json_object_object_add(robj, "table", aobj);
-	for (tab = res->tables; tab; tab = tab->next) {
-	    render_table(tab, aobj);
+    if (res->tables) {
+	aobj = json_object_new_array();
+	if (aobj) {
+	    json_object_object_add(robj, "table", aobj);
+	    for (tab = res->tables; tab; tab = tab->next) {
+		render_table(tab, aobj);
+	    }
 	}
     }
 }
@@ -2286,6 +2318,9 @@ render_actions(struct action *actions, json_object *jobj, int what)
 {
     json_object *ja, *jact;
     struct action *a;
+
+    if (!actions)
+	return;
 
     ja = json_object_new_array();
     if (!ja)
@@ -2557,18 +2592,12 @@ render_events(struct event *event, json_object *jobj, int what)
 		if (!(jsub = json_object_new_object()))
 		    return -1;
 		json_object_object_add(je, "calendar", jsub);
-		if (event->months)
-		    render_leaf_months(jsub, "month", event->months);
-		if (event->days_of_month)
-		    render_leaf_days_of_month(jsub, "day-of-month", event->days_of_month);
-		if (event->days_of_week)
-		    render_leaf_days_of_week(jsub, "day-of-week", event->days_of_week);
-		if (event->hours)
-		    render_leaf_hours(jsub, "hour", event->hours);
-		if (event->minutes)
-		    render_leaf_minsecs(jsub, "minute", event->minutes);
-		if (event->seconds)
-		    render_leaf_minsecs(jsub, "second", event->seconds);
+		render_leaf_months(jsub, "month", event->months);
+		render_leaf_days_of_month(jsub, "day-of-month", event->days_of_month);
+		render_leaf_days_of_week(jsub, "day-of-week", event->days_of_week);
+		render_leaf_hours(jsub, "hour", event->hours);
+		render_leaf_minsecs(jsub, "minute", event->minutes);
+		render_leaf_minsecs(jsub, "second", event->seconds);
 		if (event->flags & LMAP_EVENT_FLAG_TIMEZONE_OFFSET_SET) {
 		    char buf[42];
 		    char c = (event->timezone_offset < 0) ? '-' : '+';
@@ -2712,11 +2741,13 @@ lmap_json_render_report(struct lmap *lmap)
     json_object_object_add(jobj, LMAPR_JSON_NAMESPACE ":" "report", robj);
     render_agent_report(lmap->agent, robj);
 
-    if (!(aobj = json_object_new_array()))
-	goto err_exit;
-    json_object_object_add(robj, "result", aobj);
-    for (res = lmap->results; res; res = res->next) {
-	render_result(res, aobj);
+    if (lmap->results) {
+	if (!(aobj = json_object_new_array()))
+	    goto err_exit;
+	json_object_object_add(robj, "result", aobj);
+	for (res = lmap->results; res; res = res->next) {
+	    render_result(res, aobj);
+	}
     }
 
     r1 = json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY);
