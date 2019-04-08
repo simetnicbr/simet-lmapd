@@ -1731,6 +1731,110 @@ lmap_json_parse_report_string(struct lmap *lmap, const char *string)
     return parse_string(lmap, string, &parse_report_doc);
 }
 
+/* piece-wise parse structured task output, we accept either a list
+ * of tables, or a single instance of a report result table.  To make
+ * things easier for task writers, we accept:
+ *
+ *   { "table:" [ <object>, ... ], }
+ *   [ <object>, ... ]
+ *   <object>
+ *   (empty file)
+ *
+ *   where <object> is an report.result.table member.  We could try
+ *   to handle objects back-to-back without an array, but that means
+ *   poking into json-c internals due to their incomplete API.
+ *
+ * Adds any parsed table(s) to result.
+ */
+int
+lmap_json_parse_task_results_fd(int fd, struct result *result)
+{
+    char *buf = NULL;
+    ssize_t res;
+    int rc = -1;
+    int i;
+
+    enum json_tokener_error jerr;
+    json_object *jobj = NULL;
+    json_object *jo;
+    struct json_tokener *jtk = NULL;
+
+    if (fd == -1 || !result)
+	return -1;
+
+    buf = malloc(JSON_READ_BUFFER_SZ);
+    jtk = json_tokener_new();
+    if (!buf || !jtk) {
+	lmap_err("out of memory while reading task result file");
+	goto err_exit;
+    }
+
+    json_tokener_set_flags(jtk, JSON_TOKENER_STRICT);
+
+    jerr = json_tokener_success;
+    do {
+	res = read(fd, buf, JSON_READ_BUFFER_SZ);
+	if (res == -1) {
+	    if (errno == EAGAIN || errno == EINTR)
+		continue;
+	    lmap_err("error while reading report data file: %s", strerror(errno));
+	    goto err_exit;
+	}
+
+	if (res > 0) {
+	    jobj = json_tokener_parse_ex(jtk, buf, res); /* res clamped to ( 0, JSON_READ_BUFFER_SZ ] */
+	    jerr = json_tokener_get_error(jtk);
+	}
+    } while (jerr == json_tokener_continue && res > 0);
+
+    if (jerr == json_tokener_success) {
+	if (json_object_is_type(jobj, json_type_null)
+		|| lmap_json_object_is_empty(jobj)) {
+	    json_object_put(jobj);
+	    jobj = NULL;
+	    rc = 0;
+	}
+	while (jobj) {
+	    if (json_object_is_type(jobj, json_type_array)) {
+		for (i = 0; i < json_object_array_length(jobj); i++) {
+		    jo = json_object_array_get_idx(jobj, i);
+		    if (parse_report_result_table(result, jo, 0))
+			break;
+		}
+	    } else if (json_object_is_type(jobj, json_type_object)) {
+		/* note: we are quite lax here, on purpose */
+		if (json_object_object_get_ex(jobj, "table", &jo)) {
+		    if (!json_object_is_type(jo, json_type_array))
+			break;
+		    jo = json_object_get(jo); /* increase refcounter */
+		    json_object_put(jobj); /* drop outer object */
+		    jobj = jo;
+		    continue;
+		} else {
+		    /* naked valid object? */
+		    if (parse_report_result_table(result, jobj, 0))
+			break;
+		}
+	    } else {
+		break;
+	    }
+
+	    json_object_put(jobj);
+	    jobj = NULL;
+	    rc = 0;
+	}
+    }
+
+    if (rc)
+	lmap_err("invalid JSON in task result: %s", json_tokener_error_desc(jerr));
+
+err_exit:
+    if (jtk)
+	json_tokener_free(jtk);
+    json_object_put(jobj);
+    free(buf);
+    return rc;
+}
 
 /*
  * JSON output I/O and rendering/serializing

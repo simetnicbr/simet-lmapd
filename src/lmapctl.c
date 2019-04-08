@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <strings.h>
 #include <assert.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -71,6 +72,7 @@ static struct
 };
 
 static struct lmapd *lmapd = NULL;
+static int task_input_ft = LMAP_FT_CSV;
 
 static void
 atexit_cb(void)
@@ -104,6 +106,7 @@ usage(FILE *f)
 #ifdef WITH_XML
 	    "\t-x use xml format when generating output (default)\n"
 #endif
+	    "\t-i [json|xml] use structured input for reports\n"
 	    "\t-h show brief usage information and exit\n",
 	    LMAPD_LMAPCTL);
 }
@@ -395,7 +398,7 @@ report_cmd(int argc, char *argv[])
      */
 
     lmapd_workspace_init(lmapd);
-    if (lmapd_workspace_read_results(lmapd) == -1) {
+    if (lmapd_workspace_read_results(lmapd, task_input_ft)) {
 	return 1;
     }
 
@@ -683,7 +686,7 @@ main(int argc, char *argv[])
 
     atexit(atexit_cb);
 
-    while ((opt = getopt(argc, argv, "q:c:r:C:hjx")) != -1) {
+    while ((opt = getopt(argc, argv, "q:c:r:C:i:hjx")) != -1) {
 	switch (opt) {
 	case 'q':
 	    queue_path = optarg;
@@ -716,6 +719,29 @@ main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	    }
 	    break;
+	case 'i':
+	    /* FIXME: whitespace trim this, for "-i foo" as a single arg */
+	    if (!strncasecmp(optarg, "json", 5)) {
+#ifdef WITH_JSON
+		task_input_ft = LMAP_FT_JSON;
+		break;
+#else
+		lmap_err("JSON IO engine unavailable");
+		exit(EXIT_FAILURE);
+#endif
+	    } else if (!strncasecmp(optarg, "xml", 4)) {
+#ifdef WITH_XML
+		task_input_ft = LMAP_FT_XML;
+		break;
+#else
+		lmap_err("XML IO engine unavailable");
+		exit(EXIT_FAILURE);
+#endif
+	    } else {
+		lmap_err("unknown structured input format for reports: %s", optarg);
+		exit(EXIT_FAILURE);
+	    }
+
 	default:
 	    usage(stderr);
 	    exit(EXIT_FAILURE);

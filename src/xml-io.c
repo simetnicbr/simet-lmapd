@@ -2681,4 +2681,12 @@ exit:
     return report;
 }
 
+int
+lmap_xml_parse_task_results_fd(int fd, struct result *result)
+{
+    /* FIXME: implement this */
+    lmap_err("parsing of structured task output in XML not implemented yet!");
+    return -1;
+}
+
 #endif /* ifdef WITH_XML */

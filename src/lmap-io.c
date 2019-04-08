@@ -15,6 +15,8 @@
  * along with lmapd. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <unistd.h>
+
 #include "lmap.h"
 #include "lmap-io.h"
 
@@ -84,6 +86,19 @@ const char *lmap_io_engine_ext(void)
 	return en[lmap_io_engine];
 
     return "";
+}
+
+int lmap_io_parse_task_results_fd(int fd, int filetype, struct result *result)
+{
+#ifdef WITH_XML
+    if (filetype == LMAP_FT_XML)
+	return lmap_xml_parse_task_results_fd(fd, result);
+#endif
+#ifdef WITH_JSON
+    if (filetype == LMAP_FT_JSON)
+	return lmap_json_parse_task_results_fd(fd, result);
+#endif
+    return -1;
 }
 
 #ifdef WITH_XML

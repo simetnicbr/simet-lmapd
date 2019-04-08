@@ -27,6 +27,12 @@ enum lmap_io_engine {
     LMAP_IO_MAX
 };
 
+/* filetypes */
+#define LMAP_FT_UNKNOWN 0
+#define LMAP_FT_XML     1
+#define LMAP_FT_JSON    2
+#define LMAP_FT_CSV     3
+
 /* change active engine, call at any point */
 extern int lmap_io_set_engine(enum lmap_io_engine engine);
 
@@ -41,5 +47,8 @@ extern int lmap_io_parse_state_path(struct lmap *lmap, const char *path);
 extern char *lmap_io_render_config(struct lmap *lmap);
 extern char *lmap_io_render_state(struct lmap *lmap);
 extern char *lmap_io_render_report(struct lmap *lmap);
+
+/* for queue IO */
+extern int lmap_io_parse_task_results_fd(int fd, int filetype, struct result *result);
 
 #endif

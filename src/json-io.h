@@ -34,6 +34,7 @@ extern int lmap_json_parse_state_string(struct lmap *lmap, const char *string);
 
 extern int lmap_json_parse_report_file(struct lmap *lmap, const char *file);
 extern int lmap_json_parse_report_string(struct lmap *lmap, const char *string);
+extern int lmap_json_parse_task_results_fd(int fd, struct result *result);
 
 extern char * lmap_json_render_config(struct lmap *lmap);
 extern char * lmap_json_render_state(struct lmap *lmap);
