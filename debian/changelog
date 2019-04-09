@@ -1,3 +1,14 @@
+simet-lmapd (0.13.0) unstable; urgency=medium
+
+  * simet-lmapd 0.13.0, based on lmapd 0.4.1 commit
+    1bb86cefb71e2fe98780601623605375ded5b02e
+  * Implement safer action->destination dataflow
+  * Implement JSON structured output from tasks
+    (partial implementation, auto-detect and XML still missing)
+  * Version sync with the simet-ma which needs these (0.13)
+
+ -- SIMET <medicoes@simet.nic.br>  Tue, 09 Apr 2019 12:04:27 -0300
+
 simet-lmapd (0.12.0) unstable; urgency=medium
 
   * simet-lmapd 0.12.0, based on lmapd 0.4.1
