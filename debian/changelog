@@ -1,3 +1,13 @@
+simet-lmapd (0.13.2) unstable; urgency=medium
+
+  * simet-lmapd 0.13.2, based on lmapd 0.4.1 commit
+    1bb86cefb71e2fe98780601623605375ded5b02e
+  * debian/rules: ensure we won't attempt (and fail) to build the
+    documentation even when doxygen happens to be installed in the
+    build system
+
+ -- SIMET <medicoes@simet.nic.br>  Thu, 03 Oct 2019 15:33:52 -0300
+
 simet-lmapd (0.13.1) unstable; urgency=medium
 
   * simet-lmapd 0.13.1, based on lmapd 0.4.1 commit

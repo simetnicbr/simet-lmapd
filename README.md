@@ -13,7 +13,7 @@ The "merge back" contribution branches are those in the "for-upstream/" branch n
 The license of any changes and contributed code by NIC.br is the same as the upstream code.
 
 ### Version
-0.4.1+simet0.13.1  (simet-lmapd fork 0.13.1)
+0.4.1+simet0.13.2  (simet-lmapd fork 0.13.2)
 
 ### Dependencies
 
