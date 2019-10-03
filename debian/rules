@@ -26,6 +26,7 @@ export DEB_CFLAGS_MAINT_APPEND := -Wall -pipe
 # change configure options _and_ ensure bootstrap/retool
 override_dh_auto_configure:
 	dh_auto_configure -- \
+		-DBUILD_DOCUMENTATION:BOOL=OFF \
 		-DCMAKE_INSTALL_PREFIX=/opt/simet \
 		-DCMAKE_INSTALL_SYSCONFDIR=/opt/simet/etc \
 		-DCMAKE_INSTALL_LOCALSTATEDIR=/var \
