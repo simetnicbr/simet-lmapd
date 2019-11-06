@@ -2296,7 +2296,7 @@ render_result(struct result *res, json_object *jobj)
     render_tags(res->tags, "tag", robj);
 
     if (res->event) {
-	render_leaf_datetime(robj, "event", &res->start);
+	render_leaf_datetime(robj, "event", &res->event);
     }
 
     if (res->start) {
