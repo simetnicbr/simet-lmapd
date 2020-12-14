@@ -215,6 +215,7 @@ struct action {
     struct action *next;
 
     int8_t state;
+    int32_t flags;
     uint64_t storage;
     time_t last_invocation;
     time_t last_completion;
@@ -238,6 +239,8 @@ struct action {
 #define LMAP_ACTION_STATE_DISABLED		0x02
 #define LMAP_ACTION_STATE_RUNNING		0x03
 #define LMAP_ACTION_STATE_SUPPRESSED		0x04
+
+#define LMAP_ACTION_FLAG_MOVEDEFERRED		0x01
 
 extern struct action * lmap_action_new();
 extern void lmap_action_free(struct action *action);

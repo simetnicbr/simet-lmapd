@@ -213,6 +213,11 @@ action_exec(struct lmapd *lmapd, struct schedule *schedule, struct action *actio
 	return -1;
     }
 
+    if (action->flags & LMAP_ACTION_FLAG_MOVEDEFERRED) {
+	lmap_wrn("action '%s' has previous results, coping with it",
+		action->name);
+    }
+
     event_base_gettimeofday_cached(lmapd->base, &t);
 
     /*
@@ -588,19 +593,30 @@ lmapd_cleanup(struct lmapd *lmapd)
 	(void) lmapd_workspace_action_meta_add_end(schedule, action);
 
 	/*
-	 * Move the results to the destinations and afterwards cleanup
-	 * the workspace.
+	 * Move the action results to the destinations and afterwards
+	 * cleanup the workspace, unless we need to defer the move to
+	 * after the whole schedule (i.e. all its actions) finished.
 	 */
 
+	/*
+	 * we only reset the MOVEDEFERRED FLAG when we move or clean,
+	 * as it is safer (less chance of data loss due to a bug).
+	 *
+	 * action->flags &= ~LMAP_ACTION_FLAG_MOVEDEFERRED;
+	 */
 	if (action->last_status == 0 && action->destinations) {
 	    for (tag = action->destinations; tag; tag = tag->next) {
-		struct schedule *dst = lmap_find_schedule(lmap, tag->tag);
-		if (dst) {
-		    (void) lmapd_workspace_action_move(lmapd, schedule, action, dst);
+		struct schedule * const dst = lmap_find_schedule(lmap, tag->tag);
+		if (dst && lmapd_workspace_action_move(lmapd, schedule, action, dst, 1) > 0) {
+		    action->flags |= LMAP_ACTION_FLAG_MOVEDEFERRED;
 		}
 	    }
 	}
-	(void) lmapd_workspace_action_clean(lmapd, action);
+	if (!(action->flags & LMAP_ACTION_FLAG_MOVEDEFERRED)) {
+	    /* cleanup early to free space early */
+	    (void) lmapd_workspace_action_clean(lmapd, action);
+	    /* action->flags &= ~LMAP_ACTION_FLAG_MOVEDEFERRED; */
+	}
 
 	/*
 	 * Is there any subsequent action in a sequential schedule?
@@ -641,6 +657,28 @@ lmapd_cleanup(struct lmapd *lmapd)
 		}
 	    }
 	    if (schedule->state != LMAP_SCHEDULE_STATE_RUNNING) {
+		/* FIXME: this will move whatever fraction of a schedule that
+		 * did run before suppresion with SCHEDULE_FLAG_STOP_RUNNING.
+		 * In that case we might want to just drop the results, instead? */
+
+		/* Move the results of any actions that had pending results,
+		 * and clean the action workspaces */
+		for (action = schedule->actions; action; action = action->next) {
+		    if (action->flags & LMAP_ACTION_FLAG_MOVEDEFERRED) {
+			for (tag = action->destinations; tag; tag = tag->next) {
+			    struct schedule * const dst = lmap_find_schedule(lmap, tag->tag);
+			    if (dst) {
+				// lmap_dbg("lmap_cleanup: processing deferral for %s::%s destination %s", schedule->name, action->name, dst->name);
+				(void) lmapd_workspace_action_move(lmapd, schedule, action, dst, 0);
+			    }
+			}
+		    }
+		    // lmap_dbg("lmap_cleanup: final cleanup for %s::%s", schedule->name, action->name);
+		    action->flags &= ~LMAP_ACTION_FLAG_MOVEDEFERRED;
+		    (void) lmapd_workspace_action_clean(lmapd, action);
+		}
+
+		/* account for the schedule run, and cleanup its input queue */
 		if (failed) {
 		    schedule->cnt_failures++;
 		} else if (succeeded) {

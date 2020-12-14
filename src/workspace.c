@@ -458,16 +458,23 @@ lmapd_workspace_action_clean(struct lmapd *lmapd, struct action *action)
  * for consumption (e.g. by the next action in a sequential execution
  * mode).
  *
+ * The "defer" parameter can be used to move the results of all
+ * actions of a schedule only after the schedule finishes running,
+ * while still immediately moving the output of actions directed
+ * to their own schedule (see above).
+ *
  * @param lmapd pointer to the struct lmapd
  * @param schedule pointer to the struct schedule
  * @param action pointer to the struct action
  * @param destination pointer to the struct schedule
- * @return 0 on success, -1 on error
+ * @param defer defer moves destined to a different schedule
+ * @return 0 on success, -1 on error, 1 if the move was deferred
  */
 
 int
 lmapd_workspace_action_move(struct lmapd *lmapd, struct schedule *schedule,
-		            struct action *action, struct schedule *destination)
+		            struct action *action, struct schedule *destination,
+			    int defer)
 {
     int ret = 0;
     char oldfilepath[PATH_MAX];
@@ -484,6 +491,13 @@ lmapd_workspace_action_move(struct lmapd *lmapd, struct schedule *schedule,
 	|| !destination || !destination->workspace) {
 	return 0;
     }
+
+    /* we want to process moves to the action's own schedule
+     * immediately, but we might want to defer moves to any other
+     * schedule to happen when the schedule finishes (i.e. all
+     * actions have finished). */
+    if (defer && destination != schedule)
+	return 1;
 
     if (destination != schedule) {
 	newfileformat = "%s/" LMAPD_QUEUE_INCOMING_NAME "/%s";
