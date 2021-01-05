@@ -1,3 +1,15 @@
+simet-lmapd (0.14.1) unstable; urgency=medium
+
+  * simet-lmapd 0.14.1, based on lmapd 0.4.1 commit
+    1bb86cefb71e2fe98780601623605375ded5b02e
+  * lmapd: defend against internal errors that call event_free(NULL)
+  * lmapd: avoid crashes/assertion for too large random spreads on
+    periodic events
+  * lmapd: refuse events of type periodic with a random spread equal
+    to, or larger than its interval (period) as invalid configuration
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 05 Jan 2021 11:39:37 -0300
+
 simet-lmapd (0.14.0) unstable; urgency=medium
 
   * simet-lmapd 0.14.0, based on lmapd 0.4.1 commit
