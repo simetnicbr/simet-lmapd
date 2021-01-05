@@ -43,14 +43,27 @@ static void
 event_gaga(struct event *event, struct event **ev,
 	   short what, event_callback_fn func, struct timeval *tv)
 {
-    assert(event && event->lmapd && ev && *ev == NULL);
+    assert(event && event->lmapd && ev);
 
-    *ev = event_new(event->lmapd->base, -1, what, func, event);
-    if (!*ev || event_add(*ev, tv) < 0)  {
-	lmap_err("failed to create/add event for '%s'", event->name);
+    if (!(*ev)) {
+	*ev = event_new(event->lmapd->base, -1, what, func, event);
+	if (!*ev || event_add(*ev, tv) < 0)  {
+	    lmap_err("failed to create/add event for '%s'", event->name);
+	}
+    } else {
+	lmap_err("failed to create/add event for '%s': event already pending, maybe due to too large a random spread?", event->name);
     }
 }
 #endif
+
+static void
+safe_event_free(struct event * event)
+{
+    if (event)
+	event_free(event);
+    else
+	lmap_wrn("internal error: tried to free an event twice");
+}
 
 /**
  * @brief Generate a uniformly distributed random number.
@@ -835,7 +848,7 @@ fire_cb(evutil_socket_t fd, short events, void *context)
     suppress_cb(event->lmapd, event);
     execute_cb(event->lmapd, event);
 
-    event_free(event->fire_event);
+    safe_event_free(event->fire_event);
     event->fire_event = NULL;
 }
 
@@ -856,7 +869,7 @@ trigger_periodic_cb(evutil_socket_t fd, short events, void *context)
 	if (t.tv_sec > event->end) {
 	    /* XXX disable related schedules / suppressions */
 	    lmap_wrn("event '%s' ending", event->name);
-	    event_free(event->trigger_event);
+	    safe_event_free(event->trigger_event);
 	    event->trigger_event = NULL;
 	    return;
 	}
@@ -884,7 +897,7 @@ trigger_calendar_cb(evutil_socket_t fd, short events, void *context)
 	if (t.tv_sec > event->end) {
 	    /* XXX disable related schedules / suppressions */
 	    lmap_wrn("event '%s' ending", event->name);
-	    event_free(event->trigger_event);
+	    safe_event_free(event->trigger_event);
 	    event->trigger_event = NULL;
 	    return;
 	}
@@ -893,7 +906,7 @@ trigger_calendar_cb(evutil_socket_t fd, short events, void *context)
     match = lmap_event_calendar_match(event, &t.tv_sec);
     if (match < 0) {
 	lmap_err("shutting down '%s'", event->name);
-	event_free(event->trigger_event);
+	safe_event_free(event->trigger_event);
 	event->trigger_event = NULL;
 	return;
     }
@@ -933,7 +946,7 @@ startup_cb(evutil_socket_t fd, short events, void *context)
 	break;
     }
 
-    event_free(event->start_event);
+    safe_event_free(event->start_event);
     event->start_event = NULL;
 }
 
