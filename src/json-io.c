@@ -164,6 +164,20 @@ struct lmap_jsonmap {
 #define JSONMAP_ENTRY_OBJECT(aname, aflag, afprefix) \
     JSONMAP_ENTRY_OBJECT_X(aname, aflag, afprefix ## _ ## aname)
 
+/*
+ * json_tokener_continue in an error context needs a better error
+ * message than "continue" if an human is to make any sense of it...
+ */
+static const char *lmapd_json_tokener_error_desc(enum json_tokener_error jerr)
+{
+    switch (jerr) {
+    case json_tokener_continue:
+	return "incomplete/truncated data";
+    default:
+	return json_tokener_error_desc(jerr);
+    }
+}
+
 /* RFC-7951 demands that empty == [null], but we accept other
  * ways to represent an existing-but-empty json field as well */
 static int lmap_json_object_is_empty(json_object * const jobj)
@@ -1593,7 +1607,7 @@ parse_file(const char *file, const char *what)
     } while (res > 0 && jerr == json_tokener_continue);
 
     if (jerr != json_tokener_success || !jo) {
-	lmap_err("invalid JSON in '%s': %s", file, json_tokener_error_desc(jerr));
+	lmap_err("invalid JSON in '%s': %s", file, lmapd_json_tokener_error_desc(jerr));
 	res = -1;
     }
 
@@ -1670,7 +1684,7 @@ parse_string(struct lmap *lmap, const char *string, lmap_parse_doc_func *cb)
 	if (je == json_tokener_success) {
 	    lmap_err("could not create JSON tokener");
 	} else {
-	    lmap_err("invalid JSON: %s", json_tokener_error_desc(je));
+	    lmap_err("invalid JSON: %s", lmapd_json_tokener_error_desc(je));
 	}
 	ret = -1;
     } else {
@@ -1826,7 +1840,7 @@ lmap_json_parse_task_results_fd(int fd, struct result *result)
     }
 
     if (rc)
-	lmap_err("invalid JSON in task result: %s", json_tokener_error_desc(jerr));
+	lmap_err("invalid JSON in task result: %s", lmapd_json_tokener_error_desc(jerr));
 
 err_exit:
     if (jtk)
