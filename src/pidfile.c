@@ -31,7 +31,8 @@
  * @brief Reads the PID stored in the pidfile
  *
  * Function to read the process identifier (PID) stored in the
- * pidfile.
+ * pidfile.  We do a simple check to see if the process is alive,
+ * and return 0 if it isn't.  But it could be any process.
  *
  * @param lmapd pointer to struct lmapd
  * @return valid PID on success, 0 on error
@@ -57,7 +58,7 @@ lmapd_pid_read(struct lmapd *lmapd)
     }
 
     fclose(f);
-    return pid;
+    return (pid > 0 && !(kill(pid, 0) == -1 && errno == ESRCH)) ? pid : 0;
 }
 
 /**
@@ -90,7 +91,7 @@ lmapd_pid_check(struct lmapd *lmapd)
  * @brief Writes current pid into the pidfile
  *
  * Function to write the current process identifier (pid) into a
- * pidfile. File is locked using flock
+ * pidfile.
  *
  * @param lmapd pointer to struct lmapd
  * @return 0 on success, -1 on erorr

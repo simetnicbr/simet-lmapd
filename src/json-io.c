@@ -1569,7 +1569,7 @@ parse_file(const char *file, const char *what)
 	goto res_out;
     }
 
-    fd = open(file, O_CLOEXEC, O_RDONLY);
+    fd = open(file, O_CLOEXEC | O_RDONLY);
     if (fd == -1) {
 	lmap_err("failed to open '%s': %s", file, strerror(errno));
 	goto res_out;
