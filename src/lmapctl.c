@@ -393,7 +393,7 @@ report_cmd(int argc, char *argv[])
 
     lmapd_workspace_init(lmapd);
     if (lmapd_workspace_read_results(lmapd, task_input_ft)) {
-	return 1;
+	return 0;
     }
 
     report = lmap_io_render_report(lmapd->lmap);
