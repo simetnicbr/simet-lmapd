@@ -1,3 +1,16 @@
+simet-lmapd (0.14.2) unstable; urgency=medium
+
+  * simet-lmapd 0.14.2, based on lmapd 0.4.1 commit
+    1bb86cefb71e2fe98780601623605375ded5b02e
+  * lmapd: json: fix missing O_RDONLY on parse_file()
+  * lmapd: try a bit harder to detect stale pidfiles
+    Ignore illegal PIDs in a pidfile (negative or zero), and check if a
+    process with the PID read from the pidfile actually exists before
+    considering it valid
+  * pidfile: remove stale comment, we don't use flock()
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Wed, 06 Jan 2021 12:23:40 -0300
+
 simet-lmapd (0.14.1) unstable; urgency=medium
 
   * simet-lmapd 0.14.1, based on lmapd 0.4.1 commit
