@@ -872,7 +872,9 @@ lmapd_workspace_read_results(struct lmapd *lmapd, const int filetype)
     struct table *tab;
     struct result *res;
 
-    int rc = 0;
+    int had_errors = 0;
+    int valid_report = 0;
+    int err;
 
     dfd = opendir(".");
     if (!dfd) {
@@ -896,7 +898,7 @@ lmapd_workspace_read_results(struct lmapd *lmapd, const int filetype)
 	    if (mfd == -1) {
 		lmap_err("failed to open meta file '%s': %s",
 			 dp->d_name, strerror(errno));
-		rc = -1;
+		had_errors = 1;
 		continue;
 	    }
 	    strcpy(p, ".data");
@@ -905,24 +907,34 @@ lmapd_workspace_read_results(struct lmapd *lmapd, const int filetype)
 		lmap_err("failed to open data file '%s': %s",
 			 dp->d_name, strerror(errno));
 		(void) close(mfd);
-		rc = -1;
+		had_errors = 1;
 		continue;
 	    }
 	    res = read_result(mfd);
 	    if (res) {
-		lmap_add_result(lmapd->lmap, res);
+		err = 1;
+
 		if (filetype == LMAP_FT_CSV) {
 		    tab = read_table(datafd);
 		    if (tab) {
 			lmap_result_add_table(res, tab);
-		    } else {
-			rc = -1;
+			err = 0;
 		    }
 		} else {
-		    if (lmap_io_parse_task_results_fd(datafd, filetype, res)) {
-			lmap_err("failed to read data file '%s'", dp->d_name);
-			rc = -1;
+		    if (!lmap_io_parse_task_results_fd(datafd, filetype, res)) {
+			err = 0;
 		    }
+		}
+
+		if (!err && lmap_result_valid(lmapd->lmap, res)) {
+		    lmap_add_result(lmapd->lmap, res);
+		    valid_report = 1;
+		} else {
+		    lmap_err("failed to read data file '%s'", dp->d_name);
+		    had_errors = 1;
+
+		    lmap_result_free(res);
+		    res = NULL;
 		}
 	    }
 	    (void) close(mfd);
@@ -930,5 +942,8 @@ lmapd_workspace_read_results(struct lmapd *lmapd, const int filetype)
 	}
     }
     (void) closedir(dfd);
-    return rc;
+
+    if (had_errors && !valid_report)
+	return -1;
+    return 0;
 }
