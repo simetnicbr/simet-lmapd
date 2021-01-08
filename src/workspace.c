@@ -272,7 +272,7 @@ lmapd_workspace_schedule_clean(struct lmapd *lmapd, struct schedule *schedule)
 	    continue;
 	}
 	if (fstatat(dirfd(dfd), dp->d_name, &st, AT_SYMLINK_NOFOLLOW)
-		|| st.st_mode & S_IFDIR) {
+		|| S_ISDIR(st.st_mode)) {
 	    continue;
 	}
 	if (unlinkat(dirfd(dfd), dp->d_name, 0)) {
@@ -306,6 +306,7 @@ lmapd_workspace_schedule_move(struct lmapd *lmapd, struct schedule *schedule)
     char oldfilepath[PATH_MAX];
     struct dirent *dp;
     DIR *dfd;
+    struct stat st;
 
     int dirfd_dest = -1;
     char *sdata = NULL, *s;
@@ -340,8 +341,8 @@ lmapd_workspace_schedule_move(struct lmapd *lmapd, struct schedule *schedule)
 
     sdata = NULL;
     while ((dp = readdir(dfd)) != NULL) {
+	/* skip ., .., hidden files/directories */
 	if (dp->d_name[0] == '.') {
-	    /* skip ., .., hidden files */
 	    continue;
 	}
 	/* is it the .meta file ? */
@@ -357,13 +358,23 @@ lmapd_workspace_schedule_move(struct lmapd *lmapd, struct schedule *schedule)
 	    s++;
 	    strcpy(s, "data"); /* strlen("data") == strlen("meta") */
 
+	    if (fstatat(dirfd(dfd), dp->d_name, &st, AT_SYMLINK_NOFOLLOW)
+		    || !S_ISREG(st.st_mode)) {
+		continue; /* "meta" is not a regular file? skip this pair */
+	    }
 	    /* "meta" *is* there, "data" might not be */
+	    if (fstatat(dirfd(dfd), sdata, &st, AT_SYMLINK_NOFOLLOW)
+		    || !S_ISREG(st.st_mode)) {
+		continue; /* "data" is not a regular file, or not there yet, skip this pair */
+	    }
 	    if (linkat(dirfd(dfd), sdata, dirfd_dest, sdata, 0)) {
-		continue; /* data not there yet, skip this pair */
+		lmap_err("failed to move %s from %s to %s: %s",
+			sdata, oldfilepath, newfilepath, strerror(errno));
+		continue;
 	    }
 	    if (linkat(dirfd(dfd), dp->d_name, dirfd_dest, dp->d_name, 0)) {
 		lmap_err("failed to move %s from %s to %s: %s",
-			sdata, oldfilepath, newfilepath, strerror(errno));
+			dp->d_name, oldfilepath, newfilepath, strerror(errno));
 		/* rollback first linkat() */
 		if (unlinkat(dirfd_dest, sdata, 0))
 		    lmap_err("Could not rollback move of '%s/%s': %s",
@@ -403,6 +414,12 @@ err_exit:
  * Function to clean the workspace of an action by removing everything
  * in the workspace directory.
  *
+ * We preserve files and direct subdirectories (but not files or
+ * directories inside subdirectories) starting with "_", so that actions
+ * can have a private namespace for work that, while not guaranteed to
+ * last across lmapd config updates and restarts, keeps state from one
+ * schedule execution to the next.
+ *
  * @param lmapd pointer to the struct lmapd
  * @param action pointer to the struct action
  * @return 0 on success, -1 on error
@@ -433,6 +450,9 @@ lmapd_workspace_action_clean(struct lmapd *lmapd, struct action *action)
 	if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..")) {
 	    continue;
 	}
+	if (dp->d_name[0] == '_') {
+	    continue;
+	}
 	snprintf(filepath, sizeof(filepath), "%s/%s",
 		 action->workspace, dp->d_name);
 	if (remove_all(filepath) != 0) {
@@ -451,6 +471,9 @@ lmapd_workspace_action_clean(struct lmapd *lmapd, struct action *action)
  * Function to move the workspace of an action to a destination
  * schedule.  The action output files are moved to the destination
  * schedule's incoming special folder.
+ *
+ * Note: all files in the action workspace are moved, except for
+ * hidden files, or those starting with "_".
  *
  * Should the destination schedule be the action's own schedule,
  * move its output files to its own schedule's *active* (processing)
@@ -482,6 +505,7 @@ lmapd_workspace_action_move(struct lmapd *lmapd, struct schedule *schedule,
     const char *newfileformat;
     struct dirent *dp;
     DIR *dfd;
+    struct stat st;
 
     assert(lmapd);
     (void) lmapd;
@@ -513,9 +537,16 @@ lmapd_workspace_action_move(struct lmapd *lmapd, struct schedule *schedule,
     }
 
     while ((dp = readdir(dfd)) != NULL) {
-	if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..")) {
+	/* we only "move" files, never directories or other inode types */
+	if (fstatat(dirfd(dfd), dp->d_name, &st, AT_SYMLINK_NOFOLLOW)
+		|| !S_ISREG(st.st_mode)) {
 	    continue;
 	}
+	if (dp->d_name[0] == '_' || dp->d_name[0] == '.') {
+	    continue;
+	}
+	/* we don't need to special case . and .. directories due
+	 * to the above */
 	snprintf(oldfilepath, sizeof(oldfilepath), "%s/%s",
 		 action->workspace, dp->d_name);
 	snprintf(newfilepath, sizeof(newfilepath), newfileformat,
