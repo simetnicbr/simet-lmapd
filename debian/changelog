@@ -1,3 +1,30 @@
+simet-lmapd (0.15.0) unstable; urgency=medium
+
+  * simet-lmapd 0.15.0, based on lmapd 0.4.1 commit
+    1bb86cefb71e2fe98780601623605375ded5b02e
+  * lmapctl: report: do not add incomplete/invalid report data.
+    When generating a lmap report, ensure that only task output (output of
+    an lmap schedule's action) that has been fully loaded without parsing
+    and validation errors is accepted.
+  * lmapd: json-io: better error message for truncated input data.
+  * lmapd: workspace: restrict a schedule's active queue to regular files.
+  * lmapd: workspace: only move regular files to destination schedules
+  * lmapd: workspace: protect private namespace for actions too.
+    Skip the private namespace (directories and files prefixed by "_") when
+    moving action results and cleaning action workspaces.  This gives
+    actions a way to preserve state across separate runs of a schedule.
+    Hidden files are also skipped when moving an action's result to
+    destinations, but they are not preserved (they will be removed by
+    lmapd_workspace_action_clean()).
+    Note that actions cannot depend on the workspaces not being fully
+    cleaned up when lmapd is restarted or reconfigured, as such workspaces
+    depend on the lmapd task and schedule configuration.
+  * lmapd: runner: cleanup action workspace at schedule start.
+    Cleanup any leftover data inside action workspaces of a schedule right
+    before we start executing the schedule.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Fri, 08 Jan 2021 18:07:44 -0300
+
 simet-lmapd (0.14.2) unstable; urgency=medium
 
   * simet-lmapd 0.14.2, based on lmapd 0.4.1 commit
