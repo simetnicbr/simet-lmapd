@@ -30,6 +30,7 @@
 #include <inttypes.h>
 #include <fnmatch.h>
 #include <errno.h>
+#include <unistd.h>
 
 #include "lmap.h"
 #include "lmapd.h"
@@ -260,6 +261,10 @@ action_exec(struct lmapd *lmapd, struct schedule *schedule, struct action *actio
 	action->last_invocation = t.tv_sec;
 	action->state = LMAP_ACTION_STATE_RUNNING;
 	action->cnt_invocations++;
+
+	/* In case we run for too long before the child can setpgid() */
+	(void) setpgid(pid, pid);
+
 	return 1;
     }
 
@@ -307,6 +312,10 @@ action_exec(struct lmapd *lmapd, struct schedule *schedule, struct action *actio
     (void) close(fd);
     if (chdir(action->workspace) == -1) {
 	lmap_err("failed to change directory");
+	exit(EXIT_FAILURE);
+    }
+    if (setpgid(0, 0) == -1) {
+	lmap_err("action '%s': setpgid failed: %s", action->name, strerror(errno));
 	exit(EXIT_FAILURE);
     }
     execvp(task->program, argv);
@@ -374,7 +383,13 @@ action_kill(struct lmapd *lmapd, struct action *action)
 
     if (action->state == LMAP_ACTION_STATE_RUNNING) {
 	if (action->pid) {
-	    (void) kill(action->pid, SIGTERM);
+	    if (kill(-(action->pid), SIGTERM)) {
+		if (errno != ESRCH)
+		    lmap_wrn("action %s, pid %ld: failed to send SIGTERM to process group: %s",
+			     action->name, (long) action->pid, strerror(errno));
+		/* try again, just the direct child this time */
+		(void) kill(action->pid, SIGTERM);
+	    }
 	}
     }
 }
@@ -544,7 +559,7 @@ lmapd_cleanup(struct lmapd *lmapd)
     event_base_gettimeofday_cached(lmapd->base, &t);
 
     while (1) {
-	pid = waitpid(0, &status, WNOHANG);
+	pid = waitpid(-1, &status, WNOHANG);
 	if (pid == 0 || pid == -1) {
 	    return;
 	}
