@@ -42,7 +42,8 @@ static void vlog(int level, const char *func, const char *format, va_list args)
 
 void setup(void)
 {
-
+    /* start from a clean (global) state */
+    last_error_msg[0] = '\0';
 }
 
 void teardown(void)
@@ -615,8 +616,11 @@ static void xx_create_doc_and_roundtrip_test(struct lmap ** const plmap, char **
     lmap_a = lmap_new();
     ck_assert_ptr_ne(lmap_a, NULL);
     ck_assert_int_eq((* parse)(lmap_a, doc), 0);
+    ck_assert_str_eq(last_error_msg, "");
+
     str_a = (* render)(lmap_a);
     ck_assert_ptr_ne(str_a, NULL);
+    ck_assert_str_eq(last_error_msg, "");
 
     if (plmap)
 	(*plmap) = lmap_a;
@@ -653,10 +657,12 @@ static void xx_test_roundtrip(const char *doc1_a, const char *doc1_b,
     str1_d = (* render1)(lmap2_a);
     ck_assert_ptr_ne(str1_d, NULL);
     ck_assert_str_eq(str1_a, str1_d);
+    ck_assert_str_eq(last_error_msg, "");
 
     str2_d = (* render2)(lmap1_a);
     ck_assert_ptr_ne(str2_d, NULL);
     ck_assert_str_eq(str2_a, str2_d);
+    ck_assert_str_eq(last_error_msg, "");
 
     lmap_free(lmap1_a); lmap_free(lmap1_b); lmap_free(lmap2_a); lmap_free(lmap2_b);
     free(str1_a); free(str1_c); free(str1_d);
@@ -1857,6 +1863,8 @@ START_TEST(test_parser_config_merge)
     ck_assert_str_eq(d, e);
     ck_assert_str_eq(e, x);
 
+    ck_assert_str_eq(last_error_msg, "");
+
     lmap_free(lmapa); lmap_free(lmapb);
     free(d); free(e);
 }
@@ -1871,7 +1879,6 @@ START_TEST(test_parser_state_agent)
         "    <lmapc:agent>"
 	"      <lmapc:agent-id>550e8400-e29b-41d4-a716-446655440000</lmapc:agent-id>"
 	"      <lmapc:agent-id>550e8400-e29b-41d4-a716-446655440000</lmapc:agent-id>"
-	"      <lmapc:version>lmap version 0.3</lmapc:version>"
 	"      <lmapc:last-started>2016-02-21T22:13:40+01:00</lmapc:last-started>"
         "    </lmapc:agent>"
         "  </lmapc:lmap>"
