@@ -613,7 +613,7 @@ parse_capabilities(struct lmap *lmap, xmlXPathContextPtr ctx, int what)
 		|| (what & PARSE_CONFIG_TRUE && tab[j].flags & YANG_CONFIG_TRUE)
 		|| (what & PARSE_CONFIG_FALSE && tab[j].flags & YANG_CONFIG_FALSE)) {
 		if (!xmlStrcmp(node->name, BAD_CAST "tasks")) {
-		    continue;
+		    goto outer;
 		}
 		if (!xmlStrcmp(node->name, BAD_CAST tab[j].name)) {
 		    xmlChar *content = xmlNodeGetContent(node);
@@ -628,6 +628,7 @@ parse_capabilities(struct lmap *lmap, xmlXPathContextPtr ctx, int what)
 	if (! tab[j].name) {
 	    lmap_wrn("unexpected element '%s'", node->name);
 	}
+    outer: continue;
     }
     xmlXPathFreeObject(result);
 
@@ -1445,6 +1446,9 @@ parse_report(struct lmap *lmap, xmlXPathContextPtr ctx)
 	xmlNodePtr node = result->nodesetval->nodeTab[i];
 
 	for (j = 0; tab[j].name; j++) {
+	    if (!xmlStrcmp(node->name, BAD_CAST "result")) {
+		goto outer;
+	    }
 	    if (!xmlStrcmp(node->name, BAD_CAST tab[j].name)) {
 		xmlChar *content = xmlNodeGetContent(node);
 		if (!xmlStrcmp(node->name, BAD_CAST "agent-id")) {
@@ -1468,6 +1472,7 @@ parse_report(struct lmap *lmap, xmlXPathContextPtr ctx)
 	if (! tab[j].name) {
 	    lmap_wrn("unexpected element '%s'", node->name);
 	}
+    outer: continue;
     }
     xmlXPathFreeObject(result);
 
