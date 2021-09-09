@@ -1,3 +1,14 @@
+simet-lmapd (0.15.1) unstable; urgency=medium
+
+  * simet-lmapd 0.15.1, based on lmapd 0.4.1 commit
+    9c7a562464c29a4fa5d2c4c939c06e53f0cc97ee
+  * lmapd: runner: run actions on their own process groups
+    Run each task (lmap action) in their own process group, and
+    and send SIGTERM to the whole process group when forcefully
+    stopping it.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 09 Sep 2021 10:01:15 -0300
+
 simet-lmapd (0.15.0) unstable; urgency=medium
 
   * simet-lmapd 0.15.0, based on lmapd 0.4.1 commit

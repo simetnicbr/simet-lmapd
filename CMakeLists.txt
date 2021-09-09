@@ -1,7 +1,7 @@
 # So cmake can tell whether or not it can process this file
 cmake_minimum_required(VERSION 3.0.0 FATAL_ERROR)
 
-project(simet-lmapd VERSION 0.15.0 LANGUAGES C)
+project(simet-lmapd VERSION 0.15.1 LANGUAGES C)
 
 option(BUILD_SHARED_LIBS "Build the shared library" OFF)
 option(BUILD_TESTS "Build test programs (requires JSON and XML support)" ON)

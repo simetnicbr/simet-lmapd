@@ -13,6 +13,12 @@ merge the resulting effort.
 
 ## Extensions to IETF lmapd
 
+### Process groups
+
+simet-lmapd runs each lmap task (action) on a process group of its own,
+and sends a SIGTERM signal to the whole process group when ordered to stop
+that lmap action.
+
 ### Task (action) output dataflow
 
 1. Output of an action goes to an "incoming" folder that belongs to the
