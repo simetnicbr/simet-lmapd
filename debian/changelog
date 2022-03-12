@@ -1,3 +1,12 @@
+simet-lmapd (0.15.2) unstable; urgency=medium
+
+  * simet-lmapd 0.15.2, based on lmapd 0.4.1 commit
+    9c7a562464c29a4fa5d2c4c939c06e53f0cc97ee
+  * deb: force use of xz compression for binary packages
+  * deb: adjust maintainer name in debian/control
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Sat, 12 Mar 2022 16:54:23 -0300
+
 simet-lmapd (0.15.1) unstable; urgency=medium
 
   * simet-lmapd 0.15.1, based on lmapd 0.4.1 commit
