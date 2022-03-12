@@ -39,3 +39,8 @@ override_dh_auto_configure:
 # ensure we always get the same behavior from dh_auto_install
 override_dh_auto_install:
 	dh_auto_install --destdir=debian/tmp
+
+# some of our tooling can't handle zstd, force xz compression
+# for binary packages
+override_dh_builddeb:
+	dh_builddeb -- -Zxz
