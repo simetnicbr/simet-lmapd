@@ -57,6 +57,7 @@ usage(FILE *f)
 	    "\t-z clean the workspace before starting\n"
 	    "\t-q path to queue directory\n"
 	    "\t-c path to config directory or file (repeat for more paths or files)\n"
+	    "\t\t(an argument of \"+\" stands for the built-in/default path)\n"
 	    "\t-b path to capability directory or file\n"
 	    "\t-r path to run directory (pid file and status file)\n"
 	    "\t-v show version information and exit\n"
@@ -184,6 +185,25 @@ read_config(struct lmapd *lmapd)
     return 0;
 }
 
+static int
+add_default_config_path(void)
+{
+    char cfgpath[] = LMAPD_CONFIG_DIR;
+    char *p = cfgpath;
+
+    while(p && *p) {
+	char *q = strchr(p, ':');
+	if (q) {
+	    *q = '\0';
+	    q++;
+	}
+	if (lmapd_add_config_path(lmapd, p))
+	    return -1;
+	p = q;
+    }
+    return 0;
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -218,8 +238,15 @@ main(int argc, char *argv[])
 	    queue_path = optarg;
 	    break;
 	case 'c':
-	    if (lmapd_add_config_path(lmapd, optarg))
-		exit(EXIT_FAILURE);
+	    if (optarg && optarg[0] == '+' && optarg[1] == '\0') {
+		if (add_default_config_path()) {
+		    exit(EXIT_FAILURE);
+		}
+	    } else {
+		if (lmapd_add_config_path(lmapd, optarg)) {
+		    exit(EXIT_FAILURE);
+		}
+	    }
 	    break;
 	case 'b':
 	    capability_path = optarg;
@@ -254,20 +281,8 @@ main(int argc, char *argv[])
 
     openlog("lmapd", LOG_PID | LOG_NDELAY, LOG_DAEMON);
 
-    if (! lmapd->config_paths) {
-	char *p = strdup(LMAPD_CONFIG_DIR);
-
-	while(p && *p) {
-	    char *q = strchr(p, ':');
-	    if (q) {
-		*q = '\0';
-		q++;
-	    }
-	    if (lmapd_add_config_path(lmapd, p))
-		exit(EXIT_FAILURE);
-	    p = q;
-	}
-    }
+    if (! lmapd->config_paths && add_default_config_path())
+	exit(EXIT_FAILURE);
 
     (void) lmapd_set_capability_path(lmapd,
 		capability_path ? capability_path : LMAPD_CAPABILITY_DIR);
