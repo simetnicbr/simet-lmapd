@@ -12,6 +12,7 @@ Package: simet-lmapd
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Recommends: simet-ma
+Breaks: simet-ma (<< 0.18.7~)
 Description: NIC.br SIMET Measurement Agent - LMAP core
  This is the Measurement Agent for the SIMET system from NIC.br.  It
  performs several measurements of the Internet connectivity against
