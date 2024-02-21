@@ -95,7 +95,7 @@ vlog(int level, const char *func, const char *format, va_list args)
 static void
 usage(FILE *f)
 {
-    fprintf(f, "usage: %s [-h] [-j|-x] [-q queue] [-c config] [-C dir] [-s status]\n"
+    fprintf(f, "usage: %s [-h] [-j|-x] [-q queue] [-c config] [-C dir] <command> [command arguments]\n"
 	    "\t-q path to queue directory\n"
 	    "\t-c path to config directory or file\n"
 	    "\t-r path to run directory (pid file and status file)\n"
@@ -706,6 +706,8 @@ main(int argc, char *argv[])
 	    break;
 	case 'h':
 	    usage(stdout);
+	    fprintf(stdout, "\ncommands:\n");
+	    help(stdout);
 	    exit(EXIT_SUCCESS);
 	case 'j':
 	    if (lmap_io_set_engine(LMAP_IO_JSON)) {
