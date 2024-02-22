@@ -13,6 +13,13 @@ merge the resulting effort.
 
 ## Extensions to IETF lmapd
 
+### CLI
+
+1. The -c option of lmapd and lmapctl will accept an argument of "+"
+   as a stand-in for the built-in path defined at compile time.  This can
+   be used to prepend or append files and directories to the built-in
+   config path, instead of replacing it entirely.
+
 ### Process groups
 
 simet-lmapd runs each lmap task (action) on a process group of its own,

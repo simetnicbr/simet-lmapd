@@ -1,3 +1,13 @@
+simet-lmapd (0.15.3) unstable; urgency=medium
+
+  * simet-lmapd 0.15.3, based on lmapd 0.4.1 commit
+    9c7a562464c29a4fa5d2c4c939c06e53f0cc97ee
+  * lmapd, lmapctl: cli: more flexible config path option
+  * lmapctl: improve usage/help output for lmapctl -h
+  * deb: change built-in config path, breaks simet-ma before 0.18.7
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 22 Feb 2024 12:24:32 -0300
+
 simet-lmapd (0.15.2) unstable; urgency=medium
 
   * simet-lmapd 0.15.2, based on lmapd 0.4.1 commit
