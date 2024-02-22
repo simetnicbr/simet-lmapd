@@ -31,7 +31,7 @@ override_dh_auto_configure:
 		-DCMAKE_INSTALL_SYSCONFDIR=/opt/simet/etc \
 		-DCMAKE_INSTALL_LOCALSTATEDIR=/var \
 		-DCMAKE_BUILD_TYPE:STRING=RelWithDebInfo \
-		-DLMAPD_CONFIG_DIR:PATH="/opt/simet/lib/simet/lmap/config.d:/opt/simet/etc/simet/lmap:/var/run/lmapd/lmap-schedule.json" \
+		-DLMAPD_CONFIG_DIR:PATH="/opt/simet/lib/simet/lmap/config.d:/opt/simet/etc/simet/lmap" \
 		-DLMAPD_CAPABILITY_DIR:PATH="/opt/simet/lib/simet/lmap/registry.d" \
 		-DLMAPD_RUN_DIR:PATH="/var/run/lmapd" \
 		-DLMAPD_QUEUE_DIR:PATH="/var/spool/lmapd/queue"
