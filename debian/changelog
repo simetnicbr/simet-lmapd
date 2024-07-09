@@ -1,3 +1,12 @@
+simet-lmapd (0.15.4) unstable; urgency=medium
+
+  * simet-lmapd 0.15.4, based on lmapd 0.4.1 commit
+    9c7a562464c29a4fa5d2c4c939c06e53f0cc97ee
+  * lmapd: fix move of action results to their destinations
+    for schedules of type "one-off", "immediate" and "startup"
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 09 Jul 2024 09:20:25 -0300
+
 simet-lmapd (0.15.3) unstable; urgency=medium
 
   * simet-lmapd 0.15.3, based on lmapd 0.4.1 commit
