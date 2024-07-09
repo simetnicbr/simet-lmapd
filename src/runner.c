@@ -567,7 +567,7 @@ void
 lmapd_cleanup(struct lmapd *lmapd)
 {
     pid_t pid;
-    int status, failed, succeeded;
+    int status, succeeded, still_running;
     struct lmap *lmap;
     struct timeval t;
     struct action *action;
@@ -628,8 +628,9 @@ lmapd_cleanup(struct lmapd *lmapd)
 
 	/*
 	 * Move the action results to the destinations and afterwards
-	 * cleanup the workspace, unless we need to defer the move to
-	 * after the whole schedule (i.e. all its actions) finished.
+	 * cleanup the action workspace, unless we need to defer the
+	 * move to after the whole schedule (i.e. all its actions)
+	 * finished.
 	 */
 
 	/*
@@ -658,7 +659,6 @@ lmapd_cleanup(struct lmapd *lmapd)
 	 * schedule got meanwhile suppressed and the stop all running
 	 * flag is set.
 	 */
-
 	if (action->next && schedule
 	    && schedule->mode == LMAP_SCHEDULE_EXEC_MODE_SEQUENTIAL) {
 	    if (schedule->state != LMAP_SCHEDULE_STATE_SUPPRESSED
@@ -668,29 +668,30 @@ lmapd_cleanup(struct lmapd *lmapd)
 	}
 
 	/*
-	 * Change schedule state back to enabled if all actions have
-	 * left the running state.  If at least one action was executed
-	 * and every action returned success, clean up the schedule
-	 * input processing queue.
+	 * RUNNING schedules need to be switched to ENABLED when all of
+	 * its actions have left the running state, and processed for
+	 * MOVEDEFERRED.
+	 *
+	 * DISABLED schedules need to be processed for MOVEDEFERRED
+	 * when all of its actions have left the running state.
+	 *
+	 * Cleanup the schedule processing queue if at least one action
+	 * was executed, and every executed action returned success.
 	 */
-
-	if (schedule->state == LMAP_SCHEDULE_STATE_RUNNING) {
+	still_running = succeeded = 0;
+	for (action = schedule->actions; action; action = action->next) {
+	    still_running |= (action->state == LMAP_ACTION_STATE_RUNNING);
+	    succeeded     |= (action->last_status == 0);
+	}
+	if (schedule->state == LMAP_SCHEDULE_STATE_RUNNING && !still_running) {
 	    schedule->state = LMAP_SCHEDULE_STATE_ENABLED;
 	    if (schedule->cnt_active_suppressions) {
 		schedule->state = LMAP_SCHEDULE_STATE_SUPPRESSED;
 	    }
-	    succeeded = failed = 0;
-	    for (action = schedule->actions; action; action = action->next) {
-		if (action->state == LMAP_ACTION_STATE_RUNNING) {
-		    schedule->state = LMAP_SCHEDULE_STATE_RUNNING;
-		}
-		if (action->last_status) {
-		    failed = 1;
-		} else {
-		    succeeded = 1;
-		}
-	    }
-	    if (schedule->state != LMAP_SCHEDULE_STATE_RUNNING) {
+	}
+
+	{
+	    if (!still_running) {
 		/* FIXME: this will move whatever fraction of a schedule that
 		 * did run before suppresion with SCHEDULE_FLAG_STOP_RUNNING.
 		 * In that case we might want to just drop the results, instead? */
@@ -713,11 +714,11 @@ lmapd_cleanup(struct lmapd *lmapd)
 		}
 
 		/* account for the schedule run, and cleanup its input queue */
-		if (failed) {
-		    schedule->cnt_failures++;
-		} else if (succeeded) {
+		if (succeeded) {
 		    /* there was at least one action, and none failed */
 		    lmapd_workspace_schedule_clean(lmapd, schedule);
+		} else {
+		    schedule->cnt_failures++;
 		}
 	    }
 	}
