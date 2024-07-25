@@ -3,6 +3,14 @@
 This file describes behavior that is implemented in the simet fork of
 lmapd, which has not been merged in upstream lmapd yet.
 
+## event triggers of type 'startup'
+
+In IETF LMAP, the 'immediate' and 'startup' event trigger types are the
+same, and trigger on LMAPD start and SIGHUP/reload.  SIMET-LMAPD changes
+this so that only the 'immediate' event type triggers at LMAPD start and
+also on SIGHUP/reload.  Event triggers of type 'startup' trigger just once
+(when LMAPD starts).
+
 ## JSON support
 
 Simet-lmapd has JSON as its primary serialization format for structured
