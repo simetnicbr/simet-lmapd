@@ -784,6 +784,9 @@ execute_cb(struct lmapd *lmapd, struct event *event)
 		|| event->type == LMAP_EVENT_TYPE_STARTUP) {
 		sched->state = LMAP_SCHEDULE_STATE_DISABLED;
 	    }
+	    if (event->type == LMAP_EVENT_TYPE_STARTUP) {
+		lmapd->flags |= LMAPD_FLAG_STARTUPDONE;
+	    }
 	}
 
     next:
@@ -1112,6 +1115,11 @@ lmapd_run(struct lmapd *lmapd)
 		break;
 
 	    case LMAP_EVENT_TYPE_STARTUP:
+		if (lmapd->flags & LMAPD_FLAG_SKIPSTARTUP) {
+		    lmap_dbg("skipping startup event '%s' on restart", event->name);
+		    break;
+		}
+		/* falltrough */
 	    case LMAP_EVENT_TYPE_IMMEDIATE:
 		add_random_spread(event, &tv);
 		event_gaga(event, &event->fire_event, EV_TIMEOUT, fire_cb, &tv);
@@ -1203,6 +1211,9 @@ void
 lmapd_restart(struct lmapd *lmapd)
 {
     lmapd->flags |= LMAPD_FLAG_RESTART;
+    if (lmapd->flags & LMAPD_FLAG_STARTUPDONE) {
+	lmapd->flags |= LMAPD_FLAG_SKIPSTARTUP;
+    }
     lmapd_killall(lmapd);
     if (event_base_loopbreak(lmapd->base) < 0) {
 	lmap_err("failed to break the event loop");

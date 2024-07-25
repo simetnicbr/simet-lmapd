@@ -58,6 +58,8 @@ struct lmapd {
 };
 
 #define LMAPD_FLAG_RESTART	0x01
+#define LMAPD_FLAG_SKIPSTARTUP	0x02
+#define LMAPD_FLAG_STARTUPDONE	0x04
 
 extern struct lmapd * lmapd_new();
 extern void lmapd_free(struct lmapd *lmapd);
