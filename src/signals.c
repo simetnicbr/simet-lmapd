@@ -91,7 +91,7 @@ lmapd_sigterm_cb(evutil_socket_t sig, short events, void *context)
  */
 
 void
-lmapd_sighub_cb(evutil_socket_t sig, short events, void *context)
+lmapd_sighup_cb(evutil_socket_t sig, short events, void *context)
 {
     struct lmapd *lmapd = (struct lmapd *) context;
 

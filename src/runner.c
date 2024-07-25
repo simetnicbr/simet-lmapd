@@ -1004,7 +1004,7 @@ lmapd_run(struct lmapd *lmapd)
 	{ "SIGINT",	SIGINT,		lmapd_sigint_cb,	NULL },
 	{ "SIGTERM",	SIGTERM,	lmapd_sigterm_cb,	NULL },
 	{ "SIGCHLD",	SIGCHLD,	lmapd_sigchld_cb,	NULL },
-	{ "SIGHUP",	SIGHUP,		lmapd_sighub_cb,	NULL },
+	{ "SIGHUP",	SIGHUP,		lmapd_sighup_cb,	NULL },
 	{ "SIGUSR1",	SIGUSR1,	lmapd_sigusr1_cb,	NULL },
 	{ "SIGUSR2",	SIGUSR2,	lmapd_sigusr2_cb,	NULL },
 	{ NULL,		0,		NULL,			NULL }

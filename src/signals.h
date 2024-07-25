@@ -23,7 +23,7 @@
 
 extern void lmapd_sigint_cb(evutil_socket_t sig, short events, void *context);
 extern void lmapd_sigterm_cb(evutil_socket_t sig, short events, void *context);
-extern void lmapd_sighub_cb(evutil_socket_t sig, short events, void *context);
+extern void lmapd_sighup_cb(evutil_socket_t sig, short events, void *context);
 extern void lmapd_sigchld_cb(evutil_socket_t sig, short events, void *context);
 extern void lmapd_sigusr1_cb(evutil_socket_t sig, short events, void *context);
 extern void lmapd_sigusr2_cb(evutil_socket_t sig, short events, void *context);
