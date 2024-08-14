@@ -5,21 +5,21 @@ lmapd, which has not been merged in upstream lmapd yet.
 
 ## event triggers of type 'startup'
 
-In IETF LMAP, the 'immediate' and 'startup' event trigger types are the
-same, and trigger on LMAPD start and SIGHUP/reload.  SIMET-LMAPD changes
-this so that only the 'immediate' event type triggers at LMAPD start and
-also on SIGHUP/reload.  Event triggers of type 'startup' trigger just once
-(when LMAPD starts).
+In the upstream lmapd, the 'immediate' and 'startup' event trigger types
+are the same, and trigger on LMAPD start and SIGHUP/reload.  simet-lmapd
+changes this so that only the 'immediate' event type triggers at lmapd
+start and also on SIGHUP/reload.  Event triggers of type 'startup' trigger
+just once (when LMAPD starts).
 
 ## JSON support
 
-Simet-lmapd has JSON as its primary serialization format for structured
+simet-lmapd has JSON as its primary serialization format for structured
 data, instead of XML, due to code-size concerns.  Features might be
 implemented initially only in JSON mode, and XML mode will be added should
 we get enough spare time or a strong indication that upstream is going to
 merge the resulting effort.
 
-## Extensions to IETF lmapd
+## Extensions to the upstream lmapd
 
 ### CLI
 
@@ -65,11 +65,11 @@ The "incoming" folder is a subdir of the schedule's workspace.  The
 This is only relevant when lmapctl is used to generate reports, otherwise
 task output format is opaque to lmapd/simet-lmapd.
 
-The internal LMAP report generator of IETF lmapd accepts only single-table
-CSV output from tasks (running as actions inside a schedule).  This means
-a task could only output one result table in LMAP report terms.
+The internal LMAP report generator of upstream lmapd accepts only single-
+table CSV output from tasks (running as actions inside a schedule).  This
+means a task could only output one result table in LMAP report terms.
 
-Simet-lmapd has extended "lmapctl" to accept structured output from task
+simet-lmapd has extended "lmapctl" to accept structured output from task
 actions, in JSON format (XML is pending implementation).  This allows a
 task action to output as many LMAP report tables as it needs (including
 none).
