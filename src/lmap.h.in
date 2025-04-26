@@ -76,10 +76,10 @@ struct agent {
     time_t last_started;
 };
 
-#define LMAP_AGENT_FLAG_REPORT_AGENT_ID_SET		0x01
-#define LMAP_AGENT_FLAG_REPORT_GROUP_ID_SET		0x02
-#define LMAP_AGENT_FLAG_REPORT_MEASUREMENT_POINT_SET	0x04
-#define LMAP_AGENT_FLAG_CONTROLLER_TIMEOUT_SET		0x08
+#define LMAP_AGENT_FLAG_REPORT_AGENT_ID_SET		0x01U
+#define LMAP_AGENT_FLAG_REPORT_GROUP_ID_SET		0x02U
+#define LMAP_AGENT_FLAG_REPORT_MEASUREMENT_POINT_SET	0x04U
+#define LMAP_AGENT_FLAG_CONTROLLER_TIMEOUT_SET		0x08U
 
 extern struct agent * lmap_agent_new(void);
 extern void lmap_agent_free(struct agent *agent);
@@ -134,7 +134,7 @@ struct supp {
 #define LMAP_SUPP_STATE_DISABLED		0x02
 #define LMAP_SUPP_STATE_ACTIVE			0x03
 
-#define LMAP_SUPP_FLAG_STOP_RUNNING_SET		0x01
+#define LMAP_SUPP_FLAG_STOP_RUNNING_SET		0x01U
 
 extern struct supp * lmap_supp_new(void);
 extern void lmap_supp_free(struct supp *supp);
@@ -215,7 +215,7 @@ struct action {
     struct action *next;
 
     int8_t state;
-    int32_t flags;
+    uint32_t flags;
     uint64_t storage;
     time_t last_invocation;
     time_t last_completion;
@@ -240,7 +240,7 @@ struct action {
 #define LMAP_ACTION_STATE_RUNNING		0x03
 #define LMAP_ACTION_STATE_SUPPRESSED		0x04
 
-#define LMAP_ACTION_FLAG_MOVEDEFERRED		0x01
+#define LMAP_ACTION_FLAG_MOVEDEFERRED		0x01U
 
 extern struct action * lmap_action_new(void);
 extern void lmap_action_free(struct action *action);
@@ -301,10 +301,10 @@ struct schedule {
 #define LMAP_SCHEDULE_EXEC_MODE_PARALLEL	0x02
 #define LMAP_SCHEDULE_EXEC_MODE_PIPELINED	0x03
 
-#define LMAP_SCHEDULE_FLAG_END_SET		0x01
-#define LMAP_SCHEDULE_FLAG_DURATION_SET		0x02
-#define LMAP_SCHEDULE_FLAG_EXEC_MODE_SET	0x04
-#define LMAP_SCHEDULE_FLAG_STOP_RUNNING		0x08
+#define LMAP_SCHEDULE_FLAG_END_SET		0x01U
+#define LMAP_SCHEDULE_FLAG_DURATION_SET		0x02U
+#define LMAP_SCHEDULE_FLAG_EXEC_MODE_SET	0x04U
+#define LMAP_SCHEDULE_FLAG_STOP_RUNNING		0x08U
 
 #define LMAP_SCHEDULE_STATE_ENABLED		0x01
 #define LMAP_SCHEDULE_STATE_DISABLED		0x02
@@ -371,7 +371,7 @@ extern int lmap_task_add_tag(struct task *task, const char *value);
 struct event {
     char *name;
     int type;
-    int flags;
+    uint32_t flags;
     struct event *next;
 
     time_t last_invocation;
@@ -403,12 +403,12 @@ struct event {
 #define LMAP_EVENT_TYPE_CONTROLLER_LOST		0x06
 #define LMAP_EVENT_TYPE_CONTROLLER_CONNECTED	0x07
 
-#define LMAP_EVENT_FLAG_INTERVAL_SET		0x01
-#define LMAP_EVENT_FLAG_START_SET		0x02
-#define LMAP_EVENT_FLAG_END_SET			0x04
-#define LMAP_EVENT_FLAG_RANDOM_SPREAD_SET	0x08
-#define LMAP_EVENT_FLAG_CYCLE_INTERVAL_SET	0x10
-#define LMAP_EVENT_FLAG_TIMEZONE_OFFSET_SET	0x20
+#define LMAP_EVENT_FLAG_INTERVAL_SET		0x01U
+#define LMAP_EVENT_FLAG_START_SET		0x02U
+#define LMAP_EVENT_FLAG_END_SET			0x04U
+#define LMAP_EVENT_FLAG_RANDOM_SPREAD_SET	0x08U
+#define LMAP_EVENT_FLAG_CYCLE_INTERVAL_SET	0x10U
+#define LMAP_EVENT_FLAG_TIMEZONE_OFFSET_SET	0x20U
 
 extern struct event * lmap_event_new(void);
 extern void lmap_event_free(struct event *event);
