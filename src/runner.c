@@ -39,6 +39,8 @@
 #include "runner.h"
 #include "signals.h"
 
+#define UNUSED(x) (void)(x)
+
 #if 1
 static void
 event_gaga(struct event *event, struct event **ev,
@@ -400,6 +402,7 @@ static void
 action_kill(struct lmapd *lmapd, struct action *action)
 {
     assert(lmapd);
+    UNUSED(lmapd);
 
     if (!action || !action->name) {
 	return;

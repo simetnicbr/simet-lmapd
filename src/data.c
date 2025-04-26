@@ -150,6 +150,8 @@ set_int32(int32_t *ip, const char *s, const char *func)
     intmax_t i;
     char *end;
 
+    UNUSED(func);
+
     i = strtoimax(s, &end, 10);
     if (*end || i > INT32_MAX) {
 	lmap_err("illegal int32 value '%s'", s);
@@ -165,6 +167,8 @@ set_uint32(uint32_t *up, const char *s, const char *func)
     uintmax_t u;
     char *end;
 
+    UNUSED(func);
+
     u = strtoumax(s, &end, 10);
     if (*end || u > UINT32_MAX) {
 	lmap_err("illegal uint32 value '%s'", s);
@@ -179,6 +183,8 @@ set_uint64(uint64_t *up, const char *s, const char *func)
 {
     uintmax_t u;
     char *end;
+
+    UNUSED(func);
 
     u = strtoumax(s, &end, 10);
     if (*end || u > UINT64_MAX) {
@@ -798,6 +804,7 @@ lmap_capability_valid(struct lmap *lmap, struct capability *capability)
     int valid = 1;
 
     UNUSED(lmap);
+    UNUSED(capability); /* FIXME? */
 
     return valid;
 }

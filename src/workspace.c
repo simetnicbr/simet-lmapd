@@ -44,6 +44,8 @@
 /* incoming schedule queue name, must start with _ */
 #define LMAPD_QUEUE_INCOMING_NAME "_incoming"
 
+#define UNUSED(x) (void)(x)
+
 static const char delimiter = ';';
 
 /**
@@ -140,6 +142,9 @@ static unsigned long du_blocks = 0;
 static int
 du_cb(const char *fpath, const struct stat *sb, int tflag, struct FTW *ftwbuf)
 {
+    UNUSED(fpath);
+    UNUSED(ftwbuf);
+
     if (tflag == FTW_F) {
 	du_size += sb->st_size;
 	du_blocks += sb->st_blocks;

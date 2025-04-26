@@ -49,6 +49,8 @@
 #define YANG_CONFIG_FALSE	0x02
 #define YANG_KEY		0x04
 
+#define UNUSED(x) (void)(x)
+
 /**
  * @brief Parses the agent information
  * @details Function to parse the agent object information from the XML config
@@ -765,6 +767,8 @@ parse_one_off(struct event *event, xmlNodePtr one_off_node, int what)
 	  .func = lmap_event_set_start },
 	{ .name = NULL, .flags = 0, .func = NULL }
     };
+
+    UNUSED(what);
 
     for (node = xmlFirstElementChild(one_off_node);
 	 node; node = xmlNextElementSibling(node)) {
@@ -2690,6 +2694,9 @@ int
 lmap_xml_parse_task_results_fd(int fd, struct result *result)
 {
     /* FIXME: implement this */
+    UNUSED(fd);
+    UNUSED(result);
+
     lmap_err("parsing of structured task output in XML not implemented yet!");
     return -1;
 }
