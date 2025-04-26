@@ -38,11 +38,11 @@ static struct lmapd *lmapd = NULL;
 static void
 atexit_cb(void)
 {
-    if (lmapd_pid_check(lmapd)) {
-	lmapd_pid_remove(lmapd);
-    }
-
     if (lmapd) {
+	if (lmapd_pid_check(lmapd)) {
+	    lmapd_pid_remove(lmapd);
+	}
+
 	lmapd_free(lmapd);
     }
 }
