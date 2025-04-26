@@ -48,6 +48,7 @@
 #include <errno.h>
 
 #include <json.h>
+#include <json_c_version.h>
 
 #include "lmap.h"
 #include "utils.h"
@@ -71,6 +72,13 @@
 /* callback function types */
 typedef int (lmap_json_file_parse_func)(struct lmap *, const char *);
 typedef int (lmap_parse_doc_func)(struct lmap *, json_object *);
+
+/* json array index/length type, int on JSON-C <= 0.12.1, size_t otherwise */
+#if (JSON_C_MAJOR_VERSION == 0 && JSON_C_MINOR_VERSION <= 12)
+    typedef int jsonarray_len_type;
+#else
+    typedef size_t jsonarray_len_type;
+#endif
 
 /*
  * Process the parsed JSON data structure
@@ -216,7 +224,7 @@ lookup_jsonmap(void *ctx, int ctx_flags,
     json_object *jo;
     const char *jos;
     int res = 0;
-    int i;
+    jsonarray_len_type i, al;
 
     assert(table);
 
@@ -243,7 +251,7 @@ lookup_jsonmap(void *ctx, int ctx_flags,
 	    if (json_object_get_type(obj) == json_type_array &&
 		    table->flags & JSONHANDLEMAP_ARRAYITER) {
 		if (table->jobj_handler) {
-		    for (i = 0; !res && i < json_object_array_length(obj); i++) {
+		    for (i = 0, al = json_object_array_length(obj); !res && i < al; i++) {
 			jo = json_object_array_get_idx(obj, i);
 			if (table->flags & JSONHANDLEMAP_STRHDLR) {
 			    /* We might need a flag if we want to stringify JSON nodes */
@@ -486,7 +494,8 @@ parse_tasks(void *p, json_object *ctx, int what, task_item_add_func *task_add)
 {
     json_object *task_obj = NULL;
     struct task *task;
-    int res, i;
+    jsonarray_len_type i, al;
+    int res;
 
     /* ctx must be an object with a single field "task", which is an array */
     if (!ctx)
@@ -498,7 +507,7 @@ parse_tasks(void *p, json_object *ctx, int what, task_item_add_func *task_add)
 	return -1;
 
     /* iterate the inner "task" array */
-    for (res = 0, i = 0; !res && i < json_object_array_length(task_obj); i++) {
+    for (res = 0, i = 0, al = json_object_array_length(task_obj); !res && i < al; i++) {
 	task = parse_task(json_object_array_get_idx(task_obj, i), what);
 	res = (task)? 0 : -1;
 	if (!res)
@@ -823,7 +832,8 @@ xx_lctrl_events(void *p, json_object *ctx, int what)
     json_object *event_obj = NULL;
     struct lmap *lmap = p;
     struct event *event;
-    int res, i;
+    jsonarray_len_type i, al;
+    int res;
 
     /* ctx must be an object with a single field "event", which is an array */
     if (!ctx)
@@ -835,7 +845,7 @@ xx_lctrl_events(void *p, json_object *ctx, int what)
 	return -1;
 
     /* iterate the inner "event" array */
-    for (res = 0, i = 0; !res && i < json_object_array_length(event_obj); i++) {
+    for (res = 0, i = 0, al = json_object_array_length(event_obj); !res && i < al; i++) {
 	event = parse_event(json_object_array_get_idx(event_obj, i), what);
 	res = (event)? 0 : -1;
 	if (!res)
@@ -911,7 +921,8 @@ xx_lctrl_suppressions(void *p, json_object *ctx, int what)
     json_object *supp_obj = NULL;
     struct lmap *lmap = p;
     struct supp *supp;
-    int res, i;
+    jsonarray_len_type i, al;
+    int res;
 
     /* ctx must be an object with a single field "suppression", which is an array */
     if (!ctx)
@@ -923,7 +934,7 @@ xx_lctrl_suppressions(void *p, json_object *ctx, int what)
 	return -1;
 
     /* iterate the inner "suppression" array */
-    for (res = 0, i = 0; !res && i < json_object_array_length(supp_obj); i++) {
+    for (res = 0, i = 0, al = json_object_array_length(supp_obj); !res && i < al; i++) {
 	supp = parse_suppression(json_object_array_get_idx(supp_obj, i), what);
 	res = (supp)? 0 : -1;
 	if (!res)
@@ -1170,7 +1181,8 @@ xx_lctrl_schedules(void *p, json_object *ctx, int what)
     json_object *schedule_obj = NULL;
     struct lmap *lmap = p;
     struct schedule *schedule;
-    int res, i;
+    jsonarray_len_type i, al;
+    int res;
 
     /* ctx must be an object with a single field "schedule", which is an array */
     if (!ctx)
@@ -1182,7 +1194,7 @@ xx_lctrl_schedules(void *p, json_object *ctx, int what)
 	return -1;
 
     /* iterate the inner "schedule" array */
-    for (res = 0, i = 0; !res && i < json_object_array_length(schedule_obj); i++) {
+    for (res = 0, i = 0, al = json_object_array_length(schedule_obj); !res && i < al; i++) {
 	schedule = parse_schedule(json_object_array_get_idx(schedule_obj, i), what);
 	res = (schedule)? 0 : -1;
 	if (!res)
@@ -1765,7 +1777,7 @@ lmap_json_parse_task_results_fd(int fd, struct result *result)
     char *buf = NULL;
     ssize_t res;
     int rc = -1;
-    int i;
+    jsonarray_len_type i, al;
 
     enum json_tokener_error jerr;
     json_object *jobj = NULL;
@@ -1809,7 +1821,7 @@ lmap_json_parse_task_results_fd(int fd, struct result *result)
 	}
 	while (jobj) {
 	    if (json_object_is_type(jobj, json_type_array)) {
-		for (i = 0; i < json_object_array_length(jobj); i++) {
+		for (i = 0, al = json_object_array_length(jobj); i < al; i++) {
 		    jo = json_object_array_get_idx(jobj, i);
 		    if (parse_report_result_table(result, jo, 0))
 			break;
