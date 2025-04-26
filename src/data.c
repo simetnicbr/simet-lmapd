@@ -153,11 +153,11 @@ set_int32(int32_t *ip, const char *s, const char *func)
     UNUSED(func);
 
     i = strtoimax(s, &end, 10);
-    if (*end || i > INT32_MAX) {
+    if (*end || i > INT32_MAX || i < INT32_MIN) {
 	lmap_err("illegal int32 value '%s'", s);
 	return -1;
     }
-    *ip = i;
+    *ip = (int32_t)i; /* verified: INT32_MIN <= i <= INT32_MAX */
     return 0;
 }
 
@@ -174,7 +174,7 @@ set_uint32(uint32_t *up, const char *s, const char *func)
 	lmap_err("illegal uint32 value '%s'", s);
 	return -1;
     }
-    *up = u;
+    *up = (uint32_t)u; /* verified: 0 <= u <= UINT32_MAX */
     return 0;
 }
 
@@ -199,7 +199,7 @@ static int
 set_timezoneoffset(int16_t *ip, const char *s)
 {
     size_t len;
-    int hours, minutes;
+    int hours, minutes, tzo;
 
     len = strlen(s);
 
@@ -220,10 +220,11 @@ set_timezoneoffset(int16_t *ip, const char *s)
 	return -1;
     }
 
-    *ip = hours * 60 + minutes;
+    tzo = hours * 60 + minutes;
     if (s[0] == '-') {
-	*ip *= -1;
+	tzo = -tzo;
     }
+    *ip = (int16_t)(tzo); /* verified, -23 <= hours <= 23, 0 <= mintus <= 59 */
     return 0;
 }
 
@@ -1339,7 +1340,7 @@ lmap_event_set_random_spread(struct event *event, const char *value)
     ret = set_uint32(&event->random_spread, value, __FUNCTION__);
     if (ret == 0) {
 	if (event->random_spread >= RAND_MAX) {
-	    lmap_err("random_spread must be smaller than %u", RAND_MAX);
+	    lmap_err("random_spread must be smaller than %d", RAND_MAX);
 	    return -1;
 	} else {
 	    event->flags |= LMAP_EVENT_FLAG_RANDOM_SPREAD_SET;
