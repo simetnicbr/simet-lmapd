@@ -40,13 +40,13 @@ static void vlog(int level, const char *func, const char *format, va_list args)
 #endif
 }
 
-void setup(void)
+static void setup(void)
 {
     /* start from a clean (global) state */
     last_error_msg[0] = '\0';
 }
 
-void teardown(void)
+static void teardown(void)
 {
 
 }
@@ -2590,7 +2590,7 @@ START_TEST(test_load_config_json)
 }
 END_TEST
 
-Suite * lmap_suite(void)
+static Suite * lmap_suite(void)
 {
     Suite *s;
     TCase *tc_core, *tc_parser, *tc_csv, *tc_file;

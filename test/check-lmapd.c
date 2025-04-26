@@ -44,12 +44,12 @@ static void alarm_handler(int signum)
     raise(SIGINT);
 }
 
-void setup(void)
+static void setup(void)
 {
 
 }
 
-void teardown(void)
+static void teardown(void)
 {
 
 }
@@ -79,7 +79,7 @@ START_TEST(test_lmapd_run)
 }
 END_TEST
 
-Suite * lmap_suite(void)
+static Suite * lmap_suite(void)
 {
     Suite *s;
     TCase *tc_core;
