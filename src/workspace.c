@@ -58,33 +58,45 @@ static const char delimiter = ';';
  * few other characters, either, and will %-escape them instead.
  *
  * @param name file system name
- * @return pointer to a safe filesystem name (static buffer)
+ * @param buf work buffer, NULL for static buffer
+ * @param buflen work buffer length (zero for static buffer)
+ * @return pointer to a safe filesystem name
  */
 
 static char*
-mksafe(const char *name)
+mksafe(char *buf, size_t buflen, const char *name)
 {
-    int i, j;
+    size_t i, j;
     const char safe[] = "-.,_";
     const char hex[] = "0123456789ABCDEF";
     static char save_name[NAME_MAX];
 
-    for (i = 0, j = 0; name[i] && j < NAME_MAX-1; i++) {
+    if (!buf || !buflen) {
+	buf = save_name;
+	buflen = sizeof(save_name);
+    }
+
+    if (!name) {
+	buf[0] = '\0';
+	return buf;
+    }
+
+    for (i = 0, j = 0; name[i] && j < buflen - 1; i++) {
 	if (isalnum(name[i]) || (i > 0 && strchr(safe, name[i]))) {
-	    save_name[j++] = name[i];
+	    buf[j++] = name[i];
 	} else {
 	    /* %-escape the char if there is enough space left */
 	    if (j < NAME_MAX - 4) {
-		save_name[j++] = '%';
-		save_name[j++] = hex[(name[i]>>4) & 0x0f];
-		save_name[j++] = hex[name[i] & 0x0f];;
+		buf[j++] = '%';
+		buf[j++] = hex[(name[i]>>4) & 0x0f];
+		buf[j++] = hex[name[i] & 0x0f];;
 	    } else {
 		break;
 	    }
 	}
     }
-    save_name[j] = 0;
-    return save_name;
+    buf[j] = '\0';
+    return buf;
 }
 
 /**
@@ -591,7 +603,7 @@ lmapd_workspace_init(struct lmapd *lmapd)
 	    continue;
 	}
 	snprintf(filepath, sizeof(filepath), "%s/%s",
-		 lmapd->queue_path, mksafe(sched->name));
+		 lmapd->queue_path, mksafe(NULL, 0, sched->name));
 	if (mkdir(filepath, 0700) < 0 && errno != EEXIST) {
 	    lmap_err("failed to mkdir '%s'", filepath);
 	    ret = -1;
@@ -603,7 +615,7 @@ lmapd_workspace_init(struct lmapd *lmapd)
 		continue;
 	    }
 	    snprintf(filepath, sizeof(filepath), "%s/%s",
-		     sched->workspace, mksafe(act->name));
+		     sched->workspace, mksafe(NULL, 0, act->name));
 	    if (mkdir(filepath, 0700) < 0 && errno != EEXIST) {
 		lmap_err("failed to mkdir '%s'", filepath);
 		ret = -1;
@@ -673,9 +685,9 @@ lmapd_workspace_action_meta_add_start(struct schedule *schedule, struct action *
     for (tag = action->tags; tag; tag = tag->next) {
 	csv_append_key_value(f, delimiter, "tag", tag->tag);
     }
-    snprintf(buf, sizeof(buf), "%lu", schedule->last_invocation);
+    snprintf(buf, sizeof(buf), "%llu", (unsigned long long)schedule->last_invocation);
     csv_append_key_value(f, delimiter, "event", buf);
-    snprintf(buf, sizeof(buf), "%lu", action->last_invocation);
+    snprintf(buf, sizeof(buf), "%llu", (unsigned long long)action->last_invocation);
     csv_append_key_value(f, delimiter, "start", buf);
     if (schedule->cycle_number) {
 	struct tm *tmp;
@@ -709,7 +721,7 @@ lmapd_workspace_action_meta_add_end(struct schedule *schedule, struct action *ac
 	return -1;
     }
 
-    snprintf(buf, sizeof(buf), "%lu", action->last_completion);
+    snprintf(buf, sizeof(buf), "%llu", (unsigned long long)action->last_completion);
     csv_append_key_value(f, delimiter, "end", buf);
     snprintf(buf, sizeof(buf), "%d", action->last_status);
     csv_append_key_value(f, delimiter, "status", buf);
@@ -723,15 +735,14 @@ lmapd_workspace_action_open_data(struct schedule *schedule,
 				 struct action *action, int flags)
 {
     int fd;
-    int len;
     char filepath[PATH_MAX];
+    char b1[NAME_MAX];
 
-    snprintf(filepath, sizeof(filepath), "%s/%lu-%s",
-	     action->workspace, action->last_invocation,
-	     mksafe(schedule->name));
-    len = strlen(filepath);
-    snprintf(filepath+len, sizeof(filepath)-len, "-%s.data",
-	     mksafe(action->name));
+    snprintf(filepath, sizeof(filepath), "%s/%llu-%s-%s.data",
+	     action->workspace,
+	     (unsigned long long)action->last_invocation,
+	     mksafe(NULL, 0, schedule->name),
+	     mksafe(b1, sizeof(b1), action->name));
     fd = open(filepath, flags, 0600);
     if (fd == -1) {
 	lmap_err("failed to open '%s'", filepath);
@@ -744,15 +755,14 @@ lmapd_workspace_action_open_meta(struct schedule *schedule,
 				 struct action *action, int flags)
 {
     int fd;
-    int len;
     char filepath[PATH_MAX];
+    char b1[NAME_MAX];
 
-    snprintf(filepath, sizeof(filepath), "%s/%lu-%s",
-	     action->workspace, action->last_invocation,
-	     mksafe(schedule->name));
-    len = strlen(filepath);
-    snprintf(filepath+len, sizeof(filepath)-len, "-%s.meta",
-	     mksafe(action->name));
+    snprintf(filepath, sizeof(filepath), "%s/%llu-%s-%s.meta",
+	     action->workspace,
+	     (unsigned long long)action->last_invocation,
+	     mksafe(NULL, 0, schedule->name),
+	     mksafe(b1, sizeof(b1), action->name));
     fd = open(filepath, flags, 0600);
     if (fd == -1) {
 	lmap_err("failed to open '%s'", filepath);
