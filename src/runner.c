@@ -999,9 +999,9 @@ lmapd_run(struct lmapd *lmapd)
     struct timeval one_sec = { .tv_sec = 1, .tv_usec = 0 };
 
     struct {
-	char *name;
-	int signum;
-	void (*func)(evutil_socket_t sig, short events, void *context);
+	const char * const name;
+	const int signum;
+	void (* const func)(evutil_socket_t sig, short events, void *context);
 	struct event *event;
     } tab[] = {
 	{ "SIGINT",	SIGINT,		lmapd_sigint_cb,	NULL },

@@ -52,11 +52,11 @@ static int status_cmd(int argc, char *argv[]);
 static int validate_cmd(int argc, char *argv[]);
 static int version_cmd(int argc, char *argv[]);
 
-static struct
+static const struct
 {
-    char *command;
-    char *description;
-    int (*func) (int argc, char *argv[]);
+    const char * const command;
+    const char * const description;
+    int (* const func) (int argc, char *argv[]);
 } cmds[] = {
     { "clean",    "clean the workspace (be careful!)",      clean_cmd },
     { "config",   "validate and render lmap configuration", config_cmd },

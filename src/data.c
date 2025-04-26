@@ -1262,10 +1262,10 @@ lmap_event_set_type(struct event *event, const char *value)
 {
     int i;
 
-    struct {
-	char *name;
-	int type;
-    }  tab[] = {
+    const struct {
+	const char * const name;
+	const int type;
+    } tab[] = {
 	{ "periodic",			LMAP_EVENT_TYPE_PERIODIC },
 	{ "calendar",			LMAP_EVENT_TYPE_CALENDAR },
 	{ "one-off",			LMAP_EVENT_TYPE_ONE_OFF },
@@ -1365,9 +1365,9 @@ lmap_event_add_month(struct event *event, const char *value)
 {
     int i;
 
-    struct {
-	char *name;
-	uint16_t value;
+    const struct {
+	const char * const name;
+	const uint16_t value;
     } tab[] = {
 	{ "*",		UINT16_MAX },
 	{ "january",	(1 << 0) },
@@ -1425,7 +1425,7 @@ lmap_event_add_day_of_week(struct event *event, const char *value)
     int i;
 
     struct {
-	char *name;
+	const char * const name;
 	uint8_t value;
     } tab[] = {
 	{ "*",		UINT8_MAX },
