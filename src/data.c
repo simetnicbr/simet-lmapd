@@ -234,7 +234,6 @@ set_dateandtime(time_t *tp, const char *s, const char *func)
     time_t t;
     char *end;
     int16_t offset;
-    extern long timezone;
 
     /*
      * Do not use %z in strptime() since this is not portable.  It
