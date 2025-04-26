@@ -121,8 +121,8 @@ csv_append_key_value(FILE *file, const char delimiter,
 char*
 csv_next(FILE *file, const char delimiter)
 {
-    int c, i, quoted = 0;
-    size_t size = 0;
+    int c, quoted = 0;
+    size_t i, size = 0;
     char *buf = NULL;
     const char quote = '"';
 
