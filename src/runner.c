@@ -1119,7 +1119,7 @@ lmapd_run(struct lmapd *lmapd)
 		    lmap_dbg("skipping startup event '%s' on restart", event->name);
 		    break;
 		}
-		/* falltrough */
+		/* fallthrough */
 	    case LMAP_EVENT_TYPE_IMMEDIATE:
 		add_random_spread(event, &tv);
 		event_gaga(event, &event->fire_event, EV_TIMEOUT, fire_cb, &tv);
