@@ -139,47 +139,47 @@ daemonize(void)
  */
 
 static int
-read_config(struct lmapd *lmapd)
+read_config(struct lmapd *a_lmapd)
 {
     int ret = 0;
     struct paths *paths;
 
-    lmapd->lmap = lmap_new();
-    if (! lmapd->lmap) {
+    a_lmapd->lmap = lmap_new();
+    if (! a_lmapd->lmap) {
 	return -1;
     }
 
-    paths = lmapd->config_paths;
+    paths = a_lmapd->config_paths;
     while(paths && paths->path) {
-	ret = lmap_io_parse_config_path(lmapd->lmap, paths->path);
+	ret = lmap_io_parse_config_path(a_lmapd->lmap, paths->path);
 	if (ret != 0) {
-	    lmap_free(lmapd->lmap);
-	    lmapd->lmap = NULL;
+	    lmap_free(a_lmapd->lmap);
+	    a_lmapd->lmap = NULL;
 	    return -1;
 	}
 	paths = paths->next;
     }
 
-    if (lmapd->lmap->agent) {
-	lmapd->lmap->agent->last_started = time(NULL);
+    if (a_lmapd->lmap->agent) {
+	a_lmapd->lmap->agent->last_started = time(NULL);
     }
 
-    ret = lmap_io_parse_state_path(lmapd->lmap, lmapd->capability_path);
+    ret = lmap_io_parse_state_path(a_lmapd->lmap, a_lmapd->capability_path);
     if (ret != 0) {
-	lmap_free(lmapd->lmap);
-	lmapd->lmap = NULL;
+	lmap_free(a_lmapd->lmap);
+	a_lmapd->lmap = NULL;
 	return -1;
     }
 
-    if (!lmapd->lmap->capabilities) {
-	lmapd->lmap->capabilities = lmap_capability_new();
+    if (!a_lmapd->lmap->capabilities) {
+	a_lmapd->lmap->capabilities = lmap_capability_new();
     }
-    if (lmapd->lmap->capabilities) {
+    if (a_lmapd->lmap->capabilities) {
 	char buf[256];
 	snprintf(buf, sizeof(buf), "%s version %d.%d.%d", LMAPD_LMAPD,
 		 LMAP_VERSION_MAJOR, LMAP_VERSION_MINOR, LMAP_VERSION_PATCH);
-	lmap_capability_set_version(lmapd->lmap->capabilities, buf);
-	lmap_capability_add_system_tags(lmapd->lmap->capabilities);
+	lmap_capability_set_version(a_lmapd->lmap->capabilities, buf);
+	lmap_capability_add_system_tags(a_lmapd->lmap->capabilities);
     }
 
     return 0;

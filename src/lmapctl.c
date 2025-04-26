@@ -225,20 +225,20 @@ render_uint32(uint32_t num)
  */
 
 static int
-read_config(struct lmapd *lmapd)
+read_config(struct lmapd *a_lmapd)
 {
     struct paths *paths;
 
-    lmapd->lmap = lmap_new();
-    if (! lmapd->lmap) {
+    a_lmapd->lmap = lmap_new();
+    if (! a_lmapd->lmap) {
 	return -1;
     }
 
-    paths = lmapd->config_paths;
+    paths = a_lmapd->config_paths;
     while (paths && paths->path) {
-	if (lmap_io_parse_config_path(lmapd->lmap, paths->path)) {
-	    lmap_free(lmapd->lmap);
-	    lmapd->lmap = NULL;
+	if (lmap_io_parse_config_path(a_lmapd->lmap, paths->path)) {
+	    lmap_free(a_lmapd->lmap);
+	    a_lmapd->lmap = NULL;
 	    return -1;
 	}
 	paths = paths->next;
@@ -258,23 +258,23 @@ read_config(struct lmapd *lmapd)
  */
 
 static int
-read_state(struct lmapd *lmapd)
+read_state(struct lmapd *a_lmapd)
 {
     char statefile[PATH_MAX];
     const char *ext;
 
     ext = lmap_io_engine_ext();
     snprintf(statefile, sizeof(statefile), "%s/%s%s",
-	     lmapd->run_path, LMAPD_STATUS_FILE, ext);
+	     a_lmapd->run_path, LMAPD_STATUS_FILE, ext);
 
-    lmapd->lmap = lmap_new();
-    if (! lmapd->lmap) {
+    a_lmapd->lmap = lmap_new();
+    if (! a_lmapd->lmap) {
 	return -1;
     }
 
-    if (lmap_io_parse_state_file(lmapd->lmap, statefile)) {
-	lmap_free(lmapd->lmap);
-	lmapd->lmap = NULL;
+    if (lmap_io_parse_state_file(a_lmapd->lmap, statefile)) {
+	lmap_free(a_lmapd->lmap);
+	a_lmapd->lmap = NULL;
 	return -1;
     }
 
