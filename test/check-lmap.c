@@ -260,7 +260,7 @@ START_TEST(test_lmap_event_calendar)
     ck_assert_int_eq(lmap_event_add_second(event, "60"), -1);
     ck_assert_str_eq(last_error_msg, "illegal second value '60'");
     ck_assert_int_eq(lmap_event_add_second(event, "*"), 0);
-    ck_assert_int_eq(event->seconds - UINT64_MAX, 0);
+    ck_assert_uint_eq(event->seconds - UINT64_MAX, 0);
 
     ck_assert_int_eq(lmap_event_valid(NULL, event), 0);
     ck_assert_str_eq(last_error_msg, "event 'calendar' requires a minute");
@@ -270,7 +270,7 @@ START_TEST(test_lmap_event_calendar)
     ck_assert_str_eq(last_error_msg, "illegal minute value 'foo'");
     ck_assert_int_eq(lmap_event_add_minute(event, "60"), -1);
     ck_assert_str_eq(last_error_msg, "illegal minute value '60'");
-    ck_assert_int_eq(event->minutes, 3);
+    ck_assert_uint_eq(event->minutes, 3);
 
     ck_assert_int_eq(lmap_event_valid(NULL, event), 0);
     ck_assert_str_eq(last_error_msg, "event 'calendar' requires an hour");
