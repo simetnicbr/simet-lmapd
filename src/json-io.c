@@ -91,13 +91,13 @@ typedef int (lmap_jsonmap_strhdl_func)(void *, const char *);
 typedef int (lmap_jsonmap_objhdl_func)(void *, json_object *, int);
 
 struct lmap_jsonmap {
-    char *name;          /* NULL for EOT */
-    enum json_type type; /* type_null for any type */
-    int flags;           /* JSONHANDLEMAP_*, YANG_* bitmask */
+    const char * const name;          /* NULL for EOT */
+    const enum json_type type; /* type_null for any type */
+    const int flags;           /* JSONHANDLEMAP_*, YANG_* bitmask */
     /* main handler for this node */
     union {
-      lmap_jsonmap_objhdl_func *jobj_handler;
-      lmap_jsonmap_strhdl_func *str_handler;
+      lmap_jsonmap_objhdl_func * const jobj_handler;
+      lmap_jsonmap_strhdl_func * const str_handler;
     };
 };
 
@@ -686,7 +686,7 @@ static int xx_lcec_timezone_offset(void *p, const char *s)
 
 static int
 xx_lcee(void *p, json_object *ctx, int what,
-        char* type, const struct lmap_jsonmap *tab)
+        const char *type, const struct lmap_jsonmap *tab)
 {
     struct event *event = p;
     int res = -1;
@@ -750,7 +750,7 @@ xx_lcee_one_off(void *p, json_object *ctx, int what)
 }
 
 static int
-xx_lceez(void *p, json_object *ctx, char *type)
+xx_lceez(void *p, json_object *ctx, const char *type)
 {
     struct event *event = p;
 
@@ -1880,7 +1880,7 @@ json_object_objarray_add(json_object *jobj,
 }
 
 static void
-render_empty_leaf(json_object *jobj, char *name)
+render_empty_leaf(json_object *jobj, const char * const name)
 {
     /* RFC7951 section 6.9 maps YANG empty to [null] */
     json_object *ja = json_object_new_array();
@@ -1891,7 +1891,7 @@ render_empty_leaf(json_object *jobj, char *name)
 }
 
 static void
-render_leaf(json_object *jobj, char *name, char *content)
+render_leaf(json_object *jobj, const char *name, const char * const content)
 {
     assert(jobj);
 
@@ -1901,7 +1901,7 @@ render_leaf(json_object *jobj, char *name, char *content)
 }
 
 static void
-render_leaf_boolean(json_object *jobj, char *name, int content)
+render_leaf_boolean(json_object *jobj, const char * const name, const int content)
 {
     assert(jobj);
 
@@ -1912,13 +1912,13 @@ render_leaf_boolean(json_object *jobj, char *name, int content)
 }
 
 static void
-render_leaf_int32(json_object *jobj, char *name, int32_t value)
+render_leaf_int32(json_object *jobj, const char * const name, int32_t value)
 {
     json_object_objarray_add(jobj, name, json_object_new_int(value));
 }
 
 static void
-render_leaf_uint32(json_object *jobj, char *name, uint32_t value)
+render_leaf_uint32(json_object *jobj, const char * const name, uint32_t value)
 {
     /* JSON-C does not know uint32, but int64 can hold an uint32 */
     json_object_objarray_add(jobj, name, json_object_new_int64(value));
@@ -1927,7 +1927,7 @@ render_leaf_uint32(json_object *jobj, char *name, uint32_t value)
 #if 0
 /* I-JSON demands this */
 static void
-render_leaf_int64(json_object *jobj, char *name, int64_t value)
+render_leaf_int64(json_object *jobj, const char * const name, int64_t value)
 {
     char buf[64];
     snprintf(buf, sizeof(buf), "%"PRIi64, value);
@@ -1937,7 +1937,7 @@ render_leaf_int64(json_object *jobj, char *name, int64_t value)
 
 /* I-JSON demands this */
 static void
-render_leaf_uint64(json_object *jobj, char *name, uint64_t value)
+render_leaf_uint64(json_object *jobj, const char * const name, uint64_t value)
 {
     char buf[64];
     snprintf(buf, sizeof(buf), "%"PRIu64, value);
@@ -1945,7 +1945,7 @@ render_leaf_uint64(json_object *jobj, char *name, uint64_t value)
 }
 
 static void
-render_leaf_datetime(json_object *jobj, char *name, time_t *tp)
+render_leaf_datetime(json_object *jobj, const char * const name, time_t *tp)
 {
     char buf[32];
     struct tm *tmp;
@@ -1969,7 +1969,7 @@ render_leaf_datetime(json_object *jobj, char *name, time_t *tp)
 }
 
 static void
-render_leaf_days_of_month(json_object *jobj, char *name, uint32_t days_of_month)
+render_leaf_days_of_month(json_object *jobj, const char * const name, uint32_t days_of_month)
 {
     int i;
     json_object *ja;
@@ -1995,13 +1995,13 @@ render_leaf_days_of_month(json_object *jobj, char *name, uint32_t days_of_month)
 }
 
 static void
-render_leaf_months(json_object *jobj, char *name, uint16_t months)
+render_leaf_months(json_object *jobj, const char * const name, uint16_t months)
 {
     json_object *ja;
     int i;
-    struct {
-	char *name;
-	uint16_t value;
+    const struct {
+	const char * const name;
+	const uint16_t value;
     } tab[] = {
 	{ "january",	(1 << 0) },
 	{ "february",	(1 << 1) },
@@ -2039,13 +2039,13 @@ render_leaf_months(json_object *jobj, char *name, uint16_t months)
 }
 
 static void
-render_leaf_days_of_week(json_object *jobj, char *name, uint8_t days_of_week)
+render_leaf_days_of_week(json_object *jobj, const char * const name, uint8_t days_of_week)
 {
     json_object *ja;
     int i;
-    struct {
-	char *name;
-	uint8_t value;
+    const struct {
+	const char * const name;
+	const uint8_t value;
     } tab[] = {
 	{ "monday",	(1 << 0) },
 	{ "tuesday",	(1 << 1) },
@@ -2078,7 +2078,7 @@ render_leaf_days_of_week(json_object *jobj, char *name, uint8_t days_of_week)
 }
 
 static void
-render_leaf_hours(json_object *jobj, char *name, uint32_t hours)
+render_leaf_hours(json_object *jobj, const char * const name, uint32_t hours)
 {
     int i;
     json_object *ja;
@@ -2104,7 +2104,7 @@ render_leaf_hours(json_object *jobj, char *name, uint32_t hours)
 }
 
 static void
-render_leaf_minsecs(json_object *jobj, char *name, uint64_t minsecs)
+render_leaf_minsecs(json_object *jobj, const char * const name, uint64_t minsecs)
 {
     int i;
     json_object *ja;
@@ -2130,7 +2130,7 @@ render_leaf_minsecs(json_object *jobj, char *name, uint64_t minsecs)
 }
 
 static void
-render_tags(struct tag *tags, const char *name, json_object *jobj)
+render_tags(struct tag *tags, const char * const name, json_object *jobj)
 {
     json_object *ja;
     struct tag *t;
@@ -2402,7 +2402,7 @@ render_action(struct action *action, json_object *jobj, int what)
 	render_tags(action->suppression_tags, "suppression-tag", jobj);
     }
     if (what & RENDER_CONFIG_FALSE) {
-	char *state = NULL;
+	const char *state = NULL;
 	switch (action->state) {
 	case LMAP_ACTION_STATE_ENABLED:
 	    state = "enabled";
@@ -2505,7 +2505,7 @@ render_schedules(struct schedule *schedule, json_object *jobj, int what)
 	    if (schedule->flags & LMAP_SCHEDULE_FLAG_DURATION_SET)
 		render_leaf_uint64(js, "duration", schedule->duration);
 	    if (schedule->flags & LMAP_SCHEDULE_FLAG_EXEC_MODE_SET) {
-		char *mode = NULL;
+		const char *mode = NULL;
 		switch (schedule->mode) {
 		case LMAP_SCHEDULE_EXEC_MODE_SEQUENTIAL:
 		    mode = "sequential";
@@ -2523,7 +2523,7 @@ render_schedules(struct schedule *schedule, json_object *jobj, int what)
 	    render_tags(schedule->suppression_tags, "suppression-tag", js);
 	}
 	if (what & RENDER_CONFIG_FALSE) {
-	    char *state = NULL;
+	    const char *state = NULL;
 	    switch (schedule->state) {
 	    case LMAP_SCHEDULE_STATE_ENABLED:
 		state = "enabled";
@@ -2591,7 +2591,7 @@ render_suppressions(struct supp *supp, json_object *jobj, int what)
 		render_leaf_boolean(js, "stop-running", supp->stop_running);
 	}
 	if (what & RENDER_CONFIG_FALSE) {
-	    char *state = NULL;
+	    const char *state = NULL;
 	    switch (supp->state) {
 	    case LMAP_SUPP_STATE_ENABLED:
 		state = "enabled";
