@@ -121,13 +121,16 @@ csv_append_key_value(FILE *file, const char delimiter,
 char*
 csv_next(FILE *file, const char delimiter)
 {
-    int c, quoted = 0;
+    int ic, quoted = 0;
     size_t i, size = 0;
     char *buf = NULL;
     const char quote = '"';
+    char c;
 
     i = 0;
-    while ((c = fgetc(file)) != EOF) {
+    while ((ic = fgetc(file)) != EOF) {
+	c = (char)ic;
+
 	if (!quoted && c == delimiter) {
 	    break;
 	}
@@ -152,9 +155,10 @@ csv_next(FILE *file, const char delimiter)
 	}
 	if (c == quote) {
 	    if (quoted) {
-		if ((c = fgetc(file)) == EOF) {
+		if ((ic = fgetc(file)) == EOF) {
 		    break;
 		}
+		c = (char)ic;
 		if (c == delimiter) {
 		    break;
 		}
