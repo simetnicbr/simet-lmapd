@@ -135,9 +135,9 @@ remove_all(char *path)
     return nftw(path, remove_cb, 12, FTW_DEPTH | FTW_PHYS);
 }
 
-static unsigned long du_cnt = 0;
-static unsigned long du_size = 0;
-static unsigned long du_blocks = 0;
+/* static unsigned long du_cnt = 0;	unused */
+/* static unsigned long du_size = 0;	unused */
+static uint64_t du_blocks = 0;
 
 static int
 du_cb(const char *fpath, const struct stat *sb, int tflag, struct FTW *ftwbuf)
@@ -146,9 +146,9 @@ du_cb(const char *fpath, const struct stat *sb, int tflag, struct FTW *ftwbuf)
     UNUSED(ftwbuf);
 
     if (tflag == FTW_F) {
-	du_size += sb->st_size;
-	du_blocks += sb->st_blocks;
-	du_cnt++;
+	/* du_size += sb->st_size; */
+	du_blocks += (uint64_t)sb->st_blocks;
+	/* du_cnt++; */
     }
     return 0;           /* To tell nftw() to continue */
 }
@@ -156,8 +156,8 @@ du_cb(const char *fpath, const struct stat *sb, int tflag, struct FTW *ftwbuf)
 static int
 du(char *path, uint64_t *storage)
 {
-    du_cnt = 0;
-    du_size = 0;
+    /* du_cnt = 0;  */
+    /* du_size = 0; */
     du_blocks = 0;
     if (nftw(path, du_cb, 6, 0) == -1) {
 	return -1;
