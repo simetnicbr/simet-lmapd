@@ -544,11 +544,11 @@ status_cmd(int argc, char *argv[])
 		+ schedule->cnt_suppressions + schedule->cnt_overlaps;
 	    printf("%-15.15s ", schedule->name ? schedule->name : "???");
 	    printf("%-1s ", state);
-	    printf("%3d %3d %3d %3d ",
-		   total_attempts ? schedule->cnt_invocations*100/total_attempts : 0,
-		   total_attempts ? schedule->cnt_suppressions*100/total_attempts : 0,
-		   total_attempts ? schedule->cnt_overlaps*100/total_attempts : 0,
-		   schedule->cnt_invocations ? schedule->cnt_failures*100/schedule->cnt_invocations : 0);
+	    printf("%3u %3u %3u %3u ",
+		   (unsigned int)(total_attempts ? schedule->cnt_invocations*100/total_attempts : 0),
+		   (unsigned int)(total_attempts ? schedule->cnt_suppressions*100/total_attempts : 0),
+		   (unsigned int)(total_attempts ? schedule->cnt_overlaps*100/total_attempts : 0),
+		   (unsigned int)(schedule->cnt_invocations ? schedule->cnt_failures*100/schedule->cnt_invocations : 0));
 
 	    printf("%5.5s ", render_storage(schedule->storage));
 
@@ -581,11 +581,11 @@ status_cmd(int argc, char *argv[])
 		    + action->cnt_suppressions + action->cnt_overlaps;
 		printf(" %-14.14s ", action->name ? action->name : "???");
 		printf("%-1s ", state);
-		printf("%3d %3d %3d %3d ",
-		       total_attempts ? action->cnt_invocations*100/total_attempts : 0,
-		       total_attempts ? action->cnt_suppressions*100/total_attempts : 0,
-		       total_attempts ? action->cnt_overlaps*100/total_attempts : 0,
-		       action->cnt_invocations ? action->cnt_failures*100/action->cnt_invocations : 0);
+		printf("%3u %3u %3u %3u ",
+		       (unsigned int)(total_attempts ? action->cnt_invocations*100/total_attempts : 0),
+		       (unsigned int)(total_attempts ? action->cnt_suppressions*100/total_attempts : 0),
+		       (unsigned int)(total_attempts ? action->cnt_overlaps*100/total_attempts : 0),
+		       (unsigned int)(action->cnt_invocations ? action->cnt_failures*100/action->cnt_invocations : 0));
 
 		printf("%5.5s ", render_storage(action->storage));
 
