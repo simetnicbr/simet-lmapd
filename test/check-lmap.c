@@ -517,7 +517,7 @@ END_TEST
 START_TEST(test_lmap_row)
 {
     int i;
-    char *vals[] = { "foo", "bar", " b a z ", NULL };
+    const char *vals[] = { "foo", "bar", " b a z ", NULL };
     struct value *val;
 
     struct row *row = lmap_row_new();
@@ -770,7 +770,7 @@ START_TEST(test_parser_config_suppressions)
         "    </lmapc:suppressions>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *ja =
+    const char *ja =
 	"{\n"
 	"  \"ietf-lmap-control:lmap\":{\n"
 	"    \"suppressions\":{\n"
