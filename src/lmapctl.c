@@ -123,7 +123,7 @@ help(FILE *f)
     }
 }
 
-static char*
+static const char*
 render_datetime_short(time_t *tp)
 {
     static char buf[32];
@@ -165,7 +165,7 @@ render_storage(uint64_t storage)
     return buf;
 }
 
-static char*
+static const char*
 render_datetime_long(time_t *tp)
 {
     static char buf[32];
@@ -517,7 +517,7 @@ status_cmd(int argc, char *argv[])
 	   "LST", "LFS", "L-INVOKE", "L-COMPLETE", "L-FAILURE");
 
     if (lmap && lmap->schedules) {
-	char *state;
+	const char *state;
 	struct schedule *schedule;
 	struct action *action;
 	uint32_t total_attempts;
@@ -611,7 +611,7 @@ status_cmd(int argc, char *argv[])
 	   "SUPPRESSION", "S");
 
     if (lmap && lmap->supps) {
-	char *state;
+	const char *state;
 	struct supp *supp;
 
 	for (supp = lmap->supps; supp; supp = supp->next) {
