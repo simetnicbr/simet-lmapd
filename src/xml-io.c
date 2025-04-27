@@ -1283,11 +1283,18 @@ int
 lmap_xml_parse_config_string(struct lmap *lmap, const char *string)
 {
     int ret;
+    size_t len;
     xmlDocPtr doc = NULL;
 
     assert(string);
 
-    doc = xmlParseMemory(string, strlen(string));
+    len = strlen(string);
+    if (len > INT_MAX) {
+	ret = -1;
+	goto exit;
+    }
+
+    doc = xmlParseMemory(string, (int)len);  /* verified: 0 <= len <= INT_MAX */
     if (! doc) {
 	lmap_err("cannot parse from string");
 	ret = -1;
@@ -1381,11 +1388,18 @@ int
 lmap_xml_parse_state_string(struct lmap *lmap, const char *string)
 {
     int ret;
+    size_t len;
     xmlDocPtr doc = NULL;
 
     assert(string);
 
-    doc = xmlParseMemory(string, strlen(string));
+    len = strlen(string);
+    if (len > INT_MAX) {
+	ret = -1;
+	goto exit;
+    }
+
+    doc = xmlParseMemory(string, (int)len);  /* verified: 0 <= len <= INT_MAX */
     if (! doc) {
 	lmap_err("cannot parse from string");
 	ret = -1;
@@ -1743,11 +1757,18 @@ int
 lmap_xml_parse_report_string(struct lmap *lmap, const char *string)
 {
     int ret;
+    size_t len;
     xmlDocPtr doc = NULL;
 
     assert(string);
 
-    doc = xmlParseMemory(string, strlen(string));
+    len = strlen(string);
+    if (len > INT_MAX) {
+	ret = -1;
+	goto exit;
+    }
+
+    doc = xmlParseMemory(string, (int)len);  /* verified: 0 <= len <= INT_MAX */
     if (! doc) {
 	lmap_err("cannot parse from string");
 	ret = -1;
