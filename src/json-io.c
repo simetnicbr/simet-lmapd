@@ -1612,7 +1612,7 @@ parse_file(const char *file, const char *what)
 	}
 
 	if (res > 0) {
-	    jo = json_tokener_parse_ex(jtk, buf, res); /* res clamped to ( 0, JSON_READ_BUFFER_SZ ] */
+	    jo = json_tokener_parse_ex(jtk, buf, (int)res); /* res clamped to ( 0, JSON_READ_BUFFER_SZ ] */
 	    jerr = json_tokener_get_error(jtk);
 	}
     } while (res > 0 && jerr == json_tokener_continue);
@@ -1807,7 +1807,7 @@ lmap_json_parse_task_results_fd(int fd, struct result *result)
 	}
 
 	if (res > 0) {
-	    jobj = json_tokener_parse_ex(jtk, buf, res); /* res clamped to ( 0, JSON_READ_BUFFER_SZ ] */
+	    jobj = json_tokener_parse_ex(jtk, buf, (int)res); /* res clamped to ( 0, JSON_READ_BUFFER_SZ ] */
 	    jerr = json_tokener_get_error(jtk);
 	}
     } while (jerr == json_tokener_continue && res > 0);
