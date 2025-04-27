@@ -1088,8 +1088,8 @@ lmapd_run(struct lmapd *lmapd)
 		}
 		if (event->flags & LMAP_EVENT_FLAG_START_SET) {
 		    if (now > event->start) {
-			uint32_t delta = (now - event->start) / event->interval;
-			tv.tv_sec = (event->start + (delta + 1) * event->interval) - now;
+			int64_t delta = (now - event->start) / event->interval;
+			tv.tv_sec = (time_t)((event->start + (delta + 1) * event->interval) - now);
 		    } else {
 			tv.tv_sec = event->start - now;
 		    }
