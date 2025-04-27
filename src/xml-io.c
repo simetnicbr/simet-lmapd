@@ -1626,8 +1626,8 @@ parse_result(xmlNodePtr result_node)
 	}
 
 	if (!xmlStrcmp(node->name, BAD_CAST "table")) {
-	    struct table *tab = parse_table(node);
-	    lmap_result_add_table(res, tab);
+	    struct table *table = parse_table(node);
+	    lmap_result_add_table(res, table);
 	    continue;
 	}
 
