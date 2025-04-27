@@ -339,7 +339,7 @@ main(int argc, char *argv[])
      * outage? I will fix it later when the power is back. ;-)
      */
 
-    srand(time(NULL));
+    srand((unsigned int)time(NULL));
 
     pid = lmapd_pid_read(lmapd);
     if (pid) {
