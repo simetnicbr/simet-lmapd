@@ -2702,9 +2702,9 @@ render_events(struct event *event, json_object *jobj, int what)
 	render_leaf(je, "name", event->name);
 	if (what & RENDER_CONFIG_TRUE) {
 	    if (event->flags & LMAP_EVENT_FLAG_RANDOM_SPREAD_SET)
-		render_leaf_int32(je, "random-spread", event->random_spread);
+		render_leaf_uint32(je, "random-spread", event->random_spread);
 	    if (event->flags & LMAP_EVENT_FLAG_CYCLE_INTERVAL_SET)
-		render_leaf_int32(je, "cycle-interval", event->cycle_interval);
+		render_leaf_uint32(je, "cycle-interval", event->cycle_interval);
 	    switch (event->type) {
 	    case LMAP_EVENT_TYPE_PERIODIC:
 		if (!(jsub = json_object_new_object()))
