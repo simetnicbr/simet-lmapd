@@ -2388,10 +2388,10 @@ render_events(struct event *event, xmlNodePtr root, xmlNsPtr ns, int what)
 	render_leaf(node, ns, "name", event->name);
 	if (what & RENDER_CONFIG_TRUE) {
 	    if (event->flags & LMAP_EVENT_FLAG_RANDOM_SPREAD_SET) {
-		render_leaf_int32(node, ns, "random-spread", event->random_spread);
+		render_leaf_uint32(node, ns, "random-spread", event->random_spread);
 	    }
 	    if (event->flags & LMAP_EVENT_FLAG_CYCLE_INTERVAL_SET) {
-		render_leaf_int32(node, ns, "cycle-interval", event->cycle_interval);
+		render_leaf_uint32(node, ns, "cycle-interval", event->cycle_interval);
 	    }
 	    switch (event->type) {
 	    case LMAP_EVENT_TYPE_PERIODIC:
