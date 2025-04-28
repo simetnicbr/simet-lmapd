@@ -122,9 +122,24 @@ daemonize(void)
 	dup2(fd, STDOUT_FILENO);
 	dup2(fd, STDERR_FILENO);
     }
-    for (fd = sysconf(_SC_OPEN_MAX); fd > 2; fd--) {
-	(void) close(fd);
+
+#if defined(HAVE_CLOSEFROM)
+    /* glibc: uses close_range() in Linux, with a smart fallback to
+     *        iterating /proc/<pid>/fd.
+     * MUSL:  no support (yet?)
+     * BSD:   has closefrom() if new enough */
+    closefrom(3);
+#else
+    /* in the absense of an small ulimit this could take forever, so
+     * limit it to MIN(4096, _SC_OPEN_MAX) */
+    {
+	const long maxfd = sysconf(_SC_OPEN_MAX);
+	int cfd;
+	for (cfd = (maxfd < 4096)? (int)maxfd : 4096; cfd > 2; cfd--) {
+	    (void) close(cfd);
+	}
     }
+#endif
     openlog("lmapd", LOG_PID | LOG_NDELAY, LOG_DAEMON);
 }
 
