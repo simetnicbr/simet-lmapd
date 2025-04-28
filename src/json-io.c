@@ -2730,8 +2730,8 @@ render_events(struct event *event, json_object *jobj, int what)
 		if (event->flags & LMAP_EVENT_FLAG_TIMEZONE_OFFSET_SET) {
 		    char buf[42];
 		    char c = (event->timezone_offset < 0) ? '-' : '+';
-		    int16_t offset = event->timezone_offset;
-		    offset = (offset < 0) ? -1 * offset : offset;
+		    int offset = event->timezone_offset;
+		    offset = (offset < 0) ? -offset : offset;
 		    snprintf(buf, sizeof(buf), "%c%02d:%02d",
 			     c, offset / 60, offset % 60);
 		    render_leaf(jsub, "timezone-offset", buf);
