@@ -2544,18 +2544,26 @@ START_TEST(test_csv_key_value)
     csv_next_key_value(f, delimiter, &key, &value);
     ck_assert_str_eq(key, hello);
     ck_assert_str_eq(value, world);
+    free(key);
+    free(value);
     csv_next_key_value(f, delimiter, &key, &value);
     ck_assert_str_eq(key, world);
     ck_assert_str_eq(value, hello);
+    free(key);
+    free(value);
     csv_next_key_value(f, delimiter, &key, &value);
     ck_assert_ptr_eq(key, NULL);
     ck_assert_ptr_eq(value, NULL);
+    free(key);
+    free(value);
     rewind(f);
     csv_next_key_value(f, delimiter, NULL, &value);
     ck_assert_str_eq(value, world);
+    free(value);
     rewind(f);
     csv_next_key_value(f, delimiter, &key, NULL);
     ck_assert_str_eq(key, hello);
+    free(key);
     fclose(f);
 }
 END_TEST
