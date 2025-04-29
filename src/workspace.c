@@ -507,7 +507,6 @@ lmapd_workspace_action_move(struct lmapd *lmapd, struct schedule *schedule,
     int ret = 0;
     char oldfilepath[PATH_MAX];
     char newfilepath[PATH_MAX];
-    const char *newfileformat;
     struct dirent *dp;
     DIR *dfd;
     struct stat st;
@@ -528,13 +527,6 @@ lmapd_workspace_action_move(struct lmapd *lmapd, struct schedule *schedule,
     if (defer && destination != schedule)
 	return 1;
 
-    if (destination != schedule) {
-	newfileformat = "%s/" LMAPD_QUEUE_INCOMING_NAME "/%s";
-    } else {
-	/* Special case an action moving to its own schedule */
-	newfileformat = "%s/%s";
-    }
-
     dfd = opendir(action->workspace);
     if (!dfd) {
 	lmap_err("failed to open '%s'", action->workspace);
@@ -554,8 +546,16 @@ lmapd_workspace_action_move(struct lmapd *lmapd, struct schedule *schedule,
 	 * to the above */
 	snprintf(oldfilepath, sizeof(oldfilepath), "%s/%s",
 		 action->workspace, dp->d_name);
-	snprintf(newfilepath, sizeof(newfilepath), newfileformat,
-		     destination->workspace, dp->d_name);
+
+	if (destination != schedule) {
+	    snprintf(newfilepath, sizeof(newfilepath),
+			 "%s/" LMAPD_QUEUE_INCOMING_NAME "/%s",
+			 destination->workspace, dp->d_name);
+	} else {
+	    /* Special case: action moving its result to its own schedule */
+	    snprintf(newfilepath, sizeof(newfilepath), "%s/%s",
+			 destination->workspace, dp->d_name);
+	}
 	if (link(oldfilepath, newfilepath) < 0) {
 	    lmap_err("failed to move '%s' to '%s'", oldfilepath, newfilepath);
 	    ret = -1;
