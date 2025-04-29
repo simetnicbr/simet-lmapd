@@ -17,27 +17,33 @@
 
 #include <ctype.h>
 #include <stdlib.h>
+#include <errno.h>
 
 #include "utils.h"
 #include "csv.h"
 
+/**
+ * xrealloc() - reliable realloc()
+ *
+ * Unlike standard realloc, buf = xrealloc(buf, size) will not leak
+ * memory on failure.  On failure, xrealloc() returns buf with errno
+ * set to EINVAL.  On success, xrealloc() has the same semantics
+ * as realloc(), and sets errno to 0.
+ */
 static void *
 xrealloc(void *ptr, size_t size, const char *func)
 {
     char *p = realloc(ptr, size);
     if (!p) {
         lmap_log(LOG_ERR, func, "failed to allocate memory");
+	errno = ENOMEM;
+	return ptr;
     }
+    errno = 0;
     return p;
 }
 
-static void
-xfree(void *ptr)
-{
-    if (ptr) {
-        free(ptr);
-    }
-}
+#define xfree(p) free(p)
 
 static void
 append(FILE *file, const char delimiter, const char *field)
@@ -136,6 +142,8 @@ csv_next(FILE *file, const char delimiter)
 	}
 	if (c == '\n') {
 	    if (i == 0) {
+		xfree(buf);
+		errno = 0;
 		return NULL;
 	    } else {
 		ungetc(c, file);
@@ -152,6 +160,11 @@ csv_next(FILE *file, const char delimiter)
 	if (i >= size) {
 	    size += 64;
 	    buf = xrealloc(buf, size, __FUNCTION__);
+	    if (!buf || errno) {
+		xfree(buf);
+		errno = ENOMEM;
+		return NULL;
+	    }
 	}
 	if (c == quote) {
 	    if (quoted) {
@@ -179,9 +192,15 @@ csv_next(FILE *file, const char delimiter)
 	if (i >= size) {
 	    size += 2;
 	    buf = xrealloc(buf, size, __FUNCTION__);
+	    if (!buf || errno) {
+		xfree(buf);
+		errno = ENOMEM;
+		return NULL;
+	    }
 	}
 	buf[i] = 0;
     }
+    errno = 0;
     return buf;
 }
 
