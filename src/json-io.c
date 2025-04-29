@@ -1591,11 +1591,10 @@ parse_file(const char *file, const char *what)
 
     json_tokener_set_flags(jtk, JSON_TOKENER_STRICT);
     do {
-	res = read(fd, buf, JSON_READ_BUFFER_SZ);
+	do {
+	    res = read(fd, buf, JSON_READ_BUFFER_SZ);
+	} while (res == -1 && (errno == EAGAIN || errno == EINTR));
 	if (res == -1) {
-	    if (errno == EAGAIN || errno == EINTR)
-		continue;
-
 	    lmap_err("error while reading '%s': %s", file, strerror(errno));
 	    goto res_out; /* res = -1 already */
 	}
@@ -1787,10 +1786,10 @@ lmap_json_parse_task_results_fd(int fd, struct result *result)
 
     jerr = json_tokener_success;
     do {
-	res = read(fd, buf, JSON_READ_BUFFER_SZ);
+	do {
+	    res = read(fd, buf, JSON_READ_BUFFER_SZ);
+	} while (res == -1 && (errno == EAGAIN || errno == EINTR));
 	if (res == -1) {
-	    if (errno == EAGAIN || errno == EINTR)
-		continue;
 	    lmap_err("error while reading report data file: %s", strerror(errno));
 	    goto err_exit;
 	}
