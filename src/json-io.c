@@ -1572,7 +1572,7 @@ parse_file(const char *file, const char *what)
     ssize_t res = -1;
     int fd = -1;
 
-    enum json_tokener_error jerr;
+    enum json_tokener_error jerr = json_tokener_error_parse_eof;
     json_object *jo  = NULL;
     struct json_tokener *jtk = NULL;
 
