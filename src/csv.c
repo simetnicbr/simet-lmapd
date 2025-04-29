@@ -208,6 +208,7 @@ void
 csv_next_key_value(FILE *file, const char delimiter, char **key, char **value)
 {
     char *s;
+    char *v;
 
     if (key) {
 	*key = NULL;
@@ -216,24 +217,36 @@ csv_next_key_value(FILE *file, const char delimiter, char **key, char **value)
 	*value = NULL;
     }
     if (feof(file)) {
+	errno = 0;
 	return;
     }
 
     while ((s = csv_next(file, delimiter)) == NULL) {
+	if (errno) {
+	    return;
+	}
 	if (feof(file)) {
+	    errno = 0;
 	    return;
 	}
     }
+
+    v = csv_next(file, delimiter);
+    if (!v && errno) {
+	xfree(s);
+	return;
+    }
+
     if (key) {
 	*key = s;
     } else {
 	xfree(s);
     }
-    s = csv_next(file, delimiter);
     if (value) {
-	*value = s;
+	*value = v;
     } else {
-	xfree(s);
+	xfree(v);
     }
+    errno = 0;
 }
 

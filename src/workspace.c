@@ -789,6 +789,10 @@ read_table(int fd)
     while (!feof(file)) {
 	char *s = csv_next(file, delimiter);
 	if (! s) {
+	    if (errno) {
+		lmap_err("failed to parse csv file: %s", strerror(errno));
+		goto error_exit;
+	    }
 	    if (feof(file)) {
 		break;
 	    }
@@ -798,28 +802,29 @@ read_table(int fd)
 	if (!inrow) {
 	    row = lmap_row_new();
 	    if (! row) {
-		lmap_table_free(tab);
-		if (s) free(s);
-		(void) fclose(file);
-		return NULL;
+		free(s);
+		goto error_exit;
 	    }
 	    lmap_table_add_row(tab, row);
 	    inrow++;
 	}
 	val = lmap_value_new();
 	if (! val) {
-	    lmap_table_free(tab);
-	    if (s) free(s);
-	    (void) fclose(file);
-	    return NULL;
+	    free(s);
+	    goto error_exit;
 	}
 	lmap_value_set_value(val, s);
 	lmap_row_add_value(row, val);
-	if (s) free(s);
+	free(s);
     }
 
     (void) fclose(file);
     return tab;
+
+error_exit:
+    lmap_table_free(tab);
+    (void) fclose(file);
+    return NULL;
 }
 
 static struct result *
@@ -846,6 +851,14 @@ read_result(int fd)
 	key = NULL;
 	value = NULL;
 	csv_next_key_value(file, delimiter, &key, &value);
+	if (errno) {
+		lmap_err("failed to read csv file stream: %s", strerror(errno));
+		lmap_result_free(res);
+		(void) fclose(file);
+		free(key);
+		free(value);
+		return NULL;
+	}
 	if (key && value) {
 	    if (! strcmp(key, "schedule")) {
 		lmap_result_set_schedule(res, value);
@@ -888,8 +901,8 @@ read_result(int fd)
 		lmap_result_set_status(res, value);
 	    }
 	}
-	if (key) free(key);
-	if (value) free(value);
+	free(key);
+	free(value);
     }
     if (opt) {
 	lmap_result_add_option(res, opt);
