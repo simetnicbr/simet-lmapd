@@ -1030,7 +1030,9 @@ lmap_supp_new(void)
     struct supp *supp;
 
     supp = (struct supp*) xcalloc(1, sizeof(struct supp), __FUNCTION__);
-    supp->state = LMAP_SUPP_STATE_ENABLED;
+    if (supp) {
+	supp->state = LMAP_SUPP_STATE_ENABLED;
+    }
     return supp;
 }
 
@@ -1708,8 +1710,10 @@ lmap_schedule_new(void)
     struct schedule *schedule;
 
     schedule = (struct schedule*) xcalloc(1, sizeof(struct schedule), __FUNCTION__);
-    schedule->mode = LMAP_SCHEDULE_EXEC_MODE_PIPELINED;
-    schedule->state = LMAP_SCHEDULE_STATE_ENABLED;
+    if (schedule) {
+	schedule->mode = LMAP_SCHEDULE_EXEC_MODE_PIPELINED;
+	schedule->state = LMAP_SCHEDULE_STATE_ENABLED;
+    }
     return schedule;
 }
 
@@ -1951,7 +1955,9 @@ lmap_action_new(void)
     struct action *action;
 
     action = (struct action*) xcalloc(1, sizeof(struct action), __FUNCTION__);
-    action->state = LMAP_ACTION_STATE_ENABLED;
+    if (action) {
+	action->state = LMAP_ACTION_STATE_ENABLED;
+    }
     return action;
 }
 
@@ -2206,6 +2212,9 @@ lmapd_add_config_path(struct lmapd *lmapd, const char *value)
 	    (*tail)->next = NULL;
 	}
 	if (!(*tail) || !(*tail)->path) {
+	    if (*tail) {
+		xfree((*tail)->path);
+	    }
 	    xfree(*tail);
 	    *tail = NULL;
 	    lmap_log(LOG_ERR, __FUNCTION__,  "failed to allocate memory");
