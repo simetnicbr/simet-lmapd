@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <sys/utsname.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #include "lmap.h"
 #include "lmapd.h"
@@ -71,6 +72,25 @@ usage(FILE *f)
 	    LMAPD_LMAPD);
 }
 
+static int
+devnull(const int newfd, const mode_t mode)
+{
+    int oldfd = open("/dev/null", mode, 0);
+    if (oldfd == -1) {
+	return -1;
+    }
+    if (dup2(oldfd, newfd) == -1) {
+	int serr = errno;
+	(void) close(oldfd);
+	errno = serr;
+	return -1;
+    }
+    if (oldfd != newfd) {
+	(void) close(oldfd);
+    }
+    return 0;
+}
+
 /**
  * @brief Daemonizes the process
  *
@@ -82,7 +102,6 @@ usage(FILE *f)
 static void
 daemonize(void)
 {
-    int fd;
     pid_t pid;
 
     pid = fork();
@@ -116,11 +135,13 @@ daemonize(void)
     }
 
     closelog();
-    fd = open("/dev/null", O_RDWR, 0);
-    if (fd != -1) {
-	dup2(fd, STDIN_FILENO);
-	dup2(fd, STDOUT_FILENO);
-	dup2(fd, STDERR_FILENO);
+
+    /* note: do not assume FDs 0,1,2 are already open. */
+    if (devnull(STDIN_FILENO, O_RDONLY) ||
+	    devnull(STDOUT_FILENO, O_WRONLY) ||
+	    dup2(STDOUT_FILENO, STDERR_FILENO) == -1) {
+	lmap_err("failed to redirect stdin/stdout/stderr to /dev/null");
+	exit(EXIT_FAILURE);
     }
 
 #if defined(HAVE_CLOSEFROM)
