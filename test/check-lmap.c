@@ -2695,7 +2695,7 @@ int main(void)
     Suite *s;
     SRunner *sr;
 
-    setenv("TZ", "GMT", 1);
+    setenv("TZ", "UTC+00:00", 1);
 
     lmap_set_log_handler(vlog);
 
