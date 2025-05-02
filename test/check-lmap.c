@@ -89,6 +89,38 @@ START_TEST(test_lmap_agent)
 }
 END_TEST
 
+START_TEST(test_lmap_localtime_handling)
+{
+    struct agent *agent = lmap_agent_new();
+
+    setenv("TZ", "UTC+00:00", 1);
+    tzset();
+    ck_assert_int_eq(timezone, 0);
+    ck_assert_int_eq(lmap_agent_set_last_started(agent, "2016-02-10T14:48:19-01:00"), 0);
+    ck_assert_int_eq(agent->last_started, 1455119299);
+    ck_assert_int_eq(lmap_agent_set_last_started(agent, "2016-02-10T16:48:23+01:00"), 0);
+    ck_assert_int_eq(agent->last_started, 1455119303);
+
+    setenv("TZ", "XYZ-11:15", 1);
+    tzset();
+    ck_assert_int_eq(timezone, -40500);
+    ck_assert_int_eq(lmap_agent_set_last_started(agent, "2016-02-10T14:48:19-01:00"), 0);
+    ck_assert_int_eq(agent->last_started, 1455119299);
+    ck_assert_int_eq(lmap_agent_set_last_started(agent, "2016-02-10T16:48:23+01:00"), 0);
+    ck_assert_int_eq(agent->last_started, 1455119303);
+
+    setenv("TZ", "XYZ+03:45", 1);
+    tzset();
+    ck_assert_int_eq(timezone, 13500);
+    ck_assert_int_eq(lmap_agent_set_last_started(agent, "2016-02-10T14:48:19-01:00"), 0);
+    ck_assert_int_eq(agent->last_started, 1455119299);
+    ck_assert_int_eq(lmap_agent_set_last_started(agent, "2016-02-10T16:48:23+01:00"), 0);
+    ck_assert_int_eq(agent->last_started, 1455119303);
+
+    lmap_agent_free(agent);
+}
+END_TEST
+
 START_TEST(test_lmap_option)
 {
     struct option *option;
@@ -2602,6 +2634,7 @@ Suite * lmap_suite(void)
 
     tcase_add_checked_fixture(tc_core, setup, teardown);
     tcase_add_test(tc_core, test_lmap_agent);
+    tcase_add_test(tc_core, test_lmap_localtime_handling);
     tcase_add_test(tc_core, test_lmap_registry);
     tcase_add_test(tc_core, test_lmap_option);
     tcase_add_test(tc_core, test_lmap_tag);
