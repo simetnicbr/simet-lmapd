@@ -240,9 +240,7 @@ set_dateandtime(time_t *tp, const char *s, const char *func)
     memset(&tm, 0, sizeof(struct tm));
     end = strptime(s, "%Y-%m-%dT%T", &tm);
     if (end == NULL) {
-    error:
-	lmap_log(LOG_ERR, func, "illegal date and time value '%s'", s);
-	return -1;
+	goto error;
     }
 
     /*
@@ -256,14 +254,27 @@ set_dateandtime(time_t *tp, const char *s, const char *func)
 	goto error;
     }
 
+#ifdef HAVE_TIMEGM
+    t = timegm(&tm);
+    if (t == -1) {
+	lmap_log(LOG_ERR, func, "time conversion failed");
+	return -1;
+    }
+    *tp = t - (offset * 60);
+#else
     t = mktime(&tm);
     if (t == -1) {
 	lmap_log(LOG_ERR, func, "time conversion failed");
 	return -1;
     }
-    *tp = (t - (offset * 60) + timezone);
+    /* t_utc = mktime() - timezone */
+    *tp = t - timezone - (offset * 60);
+#endif
     return 0;
 
+error:
+    lmap_log(LOG_ERR, func, "illegal date and time value '%s'", s);
+    return -1;
 }
 
 static int

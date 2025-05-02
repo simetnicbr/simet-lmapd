@@ -25,6 +25,10 @@ check_symbol_exists("close_range" unistd.h HAVE_CLOSE_RANGE)
 if(${HAVE_CLOSE_RANGE})
 	add_definitions(-DHAVE_CLOSE_RANGE)
 endif()
+check_symbol_exists("timegm" time.h HAVE_TIMEGM)
+if(${HAVE_TIMEGM})
+	add_definitions(-DHAVE_TIMEGM)
+endif()
 
 # experimental code coverage stuff...
 #set(CMAKE_CXX_FLAGS "-g -O0 -Wall -fprofile-arcs -ftest-coverage")
