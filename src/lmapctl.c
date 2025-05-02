@@ -74,6 +74,7 @@ static const struct
 
 static struct lmapd *lmapd = NULL;
 static int task_input_ft = LMAP_FT_CSV;
+static int display_wide = 0;
 
 static void
 atexit_cb(void)
@@ -96,7 +97,7 @@ vlog(int level, const char *func, const char *format, va_list args)
 static void
 usage(FILE *f)
 {
-    fprintf(f, "usage: %s [-h] [-j|-x] [-q queue] [-c config] [-C dir] <command> [command arguments]\n"
+    fprintf(f, "usage: %s [-h] [-j|-x] [-q queue] [-c config] [-C dir] [-w] <command> [command arguments]\n"
 	    "\t-q path to queue directory\n"
 	    "\t-c path to config directory or file (repeat for more paths or files)\n"
 	    "\t\t(an argument of \"+\" stands for the built-in/default path)\n"
@@ -109,6 +110,7 @@ usage(FILE *f)
 	    "\t-x use xml format when generating output (default)\n"
 #endif
 	    "\t-i [json|xml] use structured input for reports\n"
+	    "\t-w wide output\n"
 	    "\t-h show brief usage information and exit\n",
 	    LMAPD_LMAPCTL);
 }
@@ -502,9 +504,18 @@ status_cmd(int argc, char *argv[])
 	printf("version:      %s\n", cap ? cap->version : "<?>");
 	if (cap && cap->tags) {
 	    struct tag *tag;
-	    printf("tags:         ");
+	    printf("tags:         "); /* 14 chars */
+
+	    const int ll_max = (display_wide) ? 132 - 14 : 80 - 14;
+	    int ll = ll_max;
 	    for (tag = cap->tags; tag; tag = tag->next) {
-		printf("%s%s", tag == cap->tags ? "" : ", ", tag->tag);
+		int tl = (int)strlen(tag->tag) + 2; /* ", " */
+		ll -= tl;
+		if (ll <= 1 && tag != cap->tags) {
+		    printf("\n              ");
+		    ll = ll_max - tl;
+		}
+		printf("%s%s", tag->tag, (tag->next)? ", " : "");
 	    }
 	    printf("\n");
 	}
@@ -513,7 +524,30 @@ status_cmd(int argc, char *argv[])
 	printf("\n");
     }
 
-    printf("%-15.15s %-1s %3.3s %3.3s %3.3s %3.3s %5.5s %3s %3s %-10s %-10s %s\n",
+    /* calculate schedule and action name column width */
+    size_t nw_max = 15;
+    if (display_wide && lmap && lmap->schedules) {
+	struct schedule *schedule;
+	struct action *action;
+	size_t anw = 0;
+
+	for (schedule = lmap->schedules; schedule; schedule = schedule->next) {
+	    anw = (schedule->name) ? strlen(schedule->name) : 0;
+	    if (anw > nw_max)
+		nw_max = anw;
+
+	    for (action = schedule->actions; action; action = action->next) {
+		/* actions are indented 1 space */
+		anw = (action->name) ? strlen(action->name) + 1 : 0;
+		if (anw > nw_max)
+		    nw_max = anw;
+	    }
+	}
+    }
+    const int name_width = (nw_max < 132-65) ? (int)nw_max : 132-65; /* 65 is the space for the other columns */
+
+    printf("%-*.*s %-1s %3.3s %3.3s %3.3s %3.3s %5.5s %3s %3s %-10s %-10s %s\n",
+	   name_width, name_width,
 	   "SCHEDULE/ACTION", "S", "IN%", "SU%", "OV%", "ER%", " STOR",
 	   "LST", "LFS", "L-INVOKE", "L-COMPLETE", "L-FAILURE");
 
@@ -543,7 +577,7 @@ status_cmd(int argc, char *argv[])
 
 	    total_attempts = schedule->cnt_invocations
 		+ schedule->cnt_suppressions + schedule->cnt_overlaps;
-	    printf("%-15.15s ", schedule->name ? schedule->name : "???");
+	    printf("%-*.*s ", name_width, name_width, schedule->name ? schedule->name : "???");
 	    printf("%-1s ", state);
 	    printf("%3u %3u %3u %3u ",
 		   (unsigned int)(total_attempts ? schedule->cnt_invocations*100/total_attempts : 0),
@@ -580,7 +614,7 @@ status_cmd(int argc, char *argv[])
 
 		total_attempts = action->cnt_invocations
 		    + action->cnt_suppressions + action->cnt_overlaps;
-		printf(" %-14.14s ", action->name ? action->name : "???");
+		printf(" %-*.*s ", name_width-1, name_width-1, action->name ? action->name : "???");
 		printf("%-1s ", state);
 		printf("%3u %3u %3u %3u ",
 		       (unsigned int)(total_attempts ? action->cnt_invocations*100/total_attempts : 0),
@@ -744,7 +778,7 @@ main(int argc, char *argv[])
 
     atexit(atexit_cb);
 
-    while ((opt = getopt(argc, argv, "q:c:r:C:i:hjx")) != -1) {
+    while ((opt = getopt(argc, argv, "q:c:r:C:i:hjxw")) != -1) {
 	switch (opt) {
 	case 'q':
 	    queue_path = optarg;
@@ -808,6 +842,9 @@ main(int argc, char *argv[])
 		lmap_err("unknown structured input format for reports: %s", optarg);
 		exit(EXIT_FAILURE);
 	    }
+	case 'w':
+	    display_wide = 1;
+	    break;
 
 	default:
 	    usage(stderr);
