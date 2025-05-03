@@ -74,7 +74,7 @@ static const struct
 
 static struct lmapd *lmapd = NULL;
 static int task_input_ft = LMAP_FT_CSV;
-static int display_wide = 0;
+static int display_wide = 80; /* 0 == no limit */
 
 static void
 atexit_cb(void)
@@ -97,7 +97,7 @@ vlog(int level, const char *func, const char *format, va_list args)
 static void
 usage(FILE *f)
 {
-    fprintf(f, "usage: %s [-h] [-j|-x] [-q queue] [-c config] [-C dir] [-w] <command> [command arguments]\n"
+    fprintf(f, "usage: %s [-h] [-j|-x] [-q queue] [-c config] [-C dir] [-w [width]] <command> [command arguments]\n"
 	    "\t-q path to queue directory\n"
 	    "\t-c path to config directory or file (repeat for more paths or files)\n"
 	    "\t\t(an argument of \"+\" stands for the built-in/default path)\n"
@@ -110,7 +110,8 @@ usage(FILE *f)
 	    "\t-x use xml format when generating output (default)\n"
 #endif
 	    "\t-i [json|xml] use structured input for reports\n"
-	    "\t-w wide output\n"
+	    "\t-w [<width>] wide output when stdout is a tty\n"
+	    "\t\t(use 0 for unlimited. <width> will be 132 if not specified)\n"
 	    "\t-h show brief usage information and exit\n",
 	    LMAPD_LMAPCTL);
 }
@@ -465,6 +466,7 @@ status_cmd(int argc, char *argv[])
     struct lmap *lmap = NULL;
     pid_t pid;
     struct timespec tp = { .tv_sec = 0, .tv_nsec = 87654321 };
+    int name_width = 15;
 
     if (argc != 1) {
 	printf("%s: wrong # of args: should be '%s'\n",
@@ -506,14 +508,16 @@ status_cmd(int argc, char *argv[])
 	    struct tag *tag;
 	    printf("tags:         "); /* 14 chars */
 
-	    const int ll_max = (display_wide) ? 132 - 14 : 80 - 14;
+	    const int ll_max = (display_wide) ? display_wide - 14 : 0;
 	    int ll = ll_max;
 	    for (tag = cap->tags; tag; tag = tag->next) {
-		int tl = (int)strlen(tag->tag) + 2; /* ", " */
-		ll -= tl;
-		if (ll <= 1 && tag != cap->tags) {
-		    printf("\n              ");
-		    ll = ll_max - tl;
+		if (display_wide > 0) {
+		    int tl = (int)strlen(tag->tag) + 2; /* ", " */
+		    ll -= tl;
+		    if (ll <= 1 && tag != cap->tags) {
+			printf("\n              ");
+			ll = ll_max - tl;
+		    }
 		}
 		printf("%s%s", tag->tag, (tag->next)? ", " : "");
 	    }
@@ -525,26 +529,37 @@ status_cmd(int argc, char *argv[])
     }
 
     /* calculate schedule and action name column width */
-    size_t nw_max = 15;
-    if (display_wide && lmap && lmap->schedules) {
-	struct schedule *schedule;
-	struct action *action;
-	size_t anw = 0;
+    if (display_wide >= 0) {
+	size_t nw_max = 2;
+	int nw;
 
-	for (schedule = lmap->schedules; schedule; schedule = schedule->next) {
-	    anw = (schedule->name) ? strlen(schedule->name) : 0;
-	    if (anw > nw_max)
-		nw_max = anw;
+	if (lmap && lmap->schedules) {
+	    struct schedule *schedule;
+	    struct action *action;
+	    size_t anw = 0;
 
-	    for (action = schedule->actions; action; action = action->next) {
-		/* actions are indented 1 space */
-		anw = (action->name) ? strlen(action->name) + 1 : 0;
+	    for (schedule = lmap->schedules; schedule; schedule = schedule->next) {
+		anw = (schedule->name) ? strlen(schedule->name) : 0;
 		if (anw > nw_max)
 		    nw_max = anw;
+
+		for (action = schedule->actions; action; action = action->next) {
+		    /* actions are indented 1 space */
+		    anw = (action->name) ? strlen(action->name) + 1 : 0;
+		    if (anw > nw_max)
+			nw_max = anw;
+		}
 	    }
 	}
+	/* punish insanity, damage-limit bugs */
+	nw = (nw_max < INT_MAX - 10) ? (int)nw_max : name_width;  /* verified, nw_max < INT_MAX */
+
+	/* we need 65 characters for the rest of the columns unless unlimited */
+	nw = (display_wide > 0 && (nw + 65 > display_wide)) ? display_wide - 65 : nw;
+
+	/* we never shrink name_width */
+	name_width = (nw > name_width) ? nw : name_width;
     }
-    const int name_width = (nw_max < 132-65) ? (int)nw_max : 132-65; /* 65 is the space for the other columns */
 
     printf("%-*.*s %-1s %3.3s %3.3s %3.3s %3.3s %5.5s %3s %3s %-10s %-10s %s\n",
 	   name_width, name_width,
@@ -726,6 +741,20 @@ add_default_config_path(void)
 }
 
 static int
+getint(const char *s)
+{
+    intmax_t i;
+    char *end;
+
+    i = strtoimax(s, &end, 10);
+    if (*end || i > INT32_MAX || i < INT32_MIN) {
+	lmap_err("illegal int32 value '%s'", s);
+	exit(EXIT_FAILURE);
+    }
+    return (int32_t)i; /* verified: INT32_MIN <= i <= INT32_MAX */
+}
+
+static int
 is_valid_fd(const int fd)
 {
     return fcntl(fd, F_GETFD) != -1 || errno != EBADF;
@@ -778,7 +807,14 @@ main(int argc, char *argv[])
 
     atexit(atexit_cb);
 
-    while ((opt = getopt(argc, argv, "q:c:r:C:i:hjxw")) != -1) {
+    /* default to unlimited columns display mode on non-tty */
+    errno = 0;
+    if (!isatty(STDOUT_FILENO) && errno != EBADF) {
+	display_wide = 0;
+    }
+
+    /* glibc, MUSL, uclibc, uclibc-ng, openbsd and freebsd grok :: */
+    while ((opt = getopt(argc, argv, "q:c:r:C:i:hjxw::")) != -1) {
 	switch (opt) {
 	case 'q':
 	    queue_path = optarg;
@@ -843,7 +879,13 @@ main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	    }
 	case 'w':
-	    display_wide = 1;
+	    display_wide = (optarg) ? getint(optarg) : -1;
+	    if (display_wide < 0) {
+		display_wide = isatty(STDOUT_FILENO) ? 132 : 0;
+	    } else if (display_wide && display_wide < 80) {
+		display_wide = 80;
+	    }
+
 	    break;
 
 	default:
