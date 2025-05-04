@@ -91,6 +91,31 @@ devnull(const int newfd, const mode_t mode)
     return 0;
 }
 
+static int
+is_valid_fd(const int fd)
+{
+    return fcntl(fd, F_GETFD) != -1 || errno != EBADF;
+}
+
+static void
+fix_fds(const int fd, const int fl)
+{
+    if (!is_valid_fd(fd) && devnull(fd, fl)) {
+	lmap_err("failed to redirect invalid FD %d to /dev/null: %s",
+		 fd, strerror(errno));
+	exit(EXIT_FAILURE);
+    }
+}
+
+static void
+sanitize_std_fds(void)
+{
+    /* do it in file descriptor numerical order! */
+    fix_fds(STDIN_FILENO,  O_RDONLY);
+    fix_fds(STDOUT_FILENO, O_WRONLY);
+    fix_fds(STDERR_FILENO, O_RDWR);
+}
+
 /**
  * @brief Daemonizes the process
  *
@@ -248,6 +273,9 @@ main(int argc, char *argv[])
     char *queue_path = NULL;
     char *run_path = NULL;
     pid_t pid;
+
+    /* Ensure POSIX environment is valid for FDs 0-2 */
+    sanitize_std_fds();
 
     lmapd = lmapd_new();
     if (! lmapd) {

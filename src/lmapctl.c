@@ -32,6 +32,7 @@
 #include <ftw.h>
 #include <inttypes.h>
 #include <time.h>
+#include <errno.h>
 
 #include "lmap.h"
 #include "lmapd.h"
@@ -690,12 +691,49 @@ add_default_config_path(void)
     return 0;
 }
 
+static int
+is_valid_fd(const int fd)
+{
+    return fcntl(fd, F_GETFD) != -1 || errno != EBADF;
+}
+
+static void
+fix_fds(const int fd, const int fl)
+{
+    int nfd;
+
+    if (is_valid_fd(fd))
+        return;
+
+    nfd = open("/dev/null", fl);
+    if (nfd == -1 || dup2(nfd, fd) == -1) {
+	lmap_err("failed to redirect invalid FD %d to /dev/null: %s",
+		 fd, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+    if (nfd != fd) {
+        close(nfd);
+    }
+}
+
+static void
+sanitize_std_fds(void)
+{
+    /* do it in file descriptor numerical order! */
+    fix_fds(STDIN_FILENO,  O_RDONLY);
+    fix_fds(STDOUT_FILENO, O_WRONLY);
+    fix_fds(STDERR_FILENO, O_RDWR);
+}
+
 int
 main(int argc, char *argv[])
 {
     int i, opt;
     char *queue_path = NULL;
     char *run_path = NULL;
+
+    /* Ensure POSIX environment is valid for FDs 0-2 */
+    sanitize_std_fds();
 
     lmap_set_log_handler(vlog);
 
