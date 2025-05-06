@@ -1,3 +1,83 @@
+simet-lmapd (0.15.6) unstable; urgency=medium
+
+  * simet-lmapd 0.15.6, based on lmapd 0.4.1 commit
+    9c7a562464c29a4fa5d2c4c939c06e53f0cc97ee
+  * The "bitrot cleanup release", with the help of Coverity Scan,
+    gcc-14 static analyzer, clang-19 and gcc-14 -Wall -Wextra,
+    plus lots of other warnings not enabled by -Wall -Wextra.
+  * Important fixes:
+    * lmapd: do not loop for too long closing fds after fork.
+      Avoid the need for ulimit when calling lmapd from a system that
+      supports millions of open files by default
+    * lmapd: strict stdin/out/err redirection with error checking.
+      Avoid data corruption in the rare case stdin/out/err redirection
+      fails.
+    * lmapd, lmapctl: ensure FDs 0-2 are open/valid at startup.
+      Avoid possible output corruption or other misbehavior if stdin/
+      stdout/stderr are closed at startup
+    * lmapd: unbreak LMAP reports on ILP32 platforms with 64-bit time_t.
+      Fixes corrupt event/start/end timestamps in queue meta files and
+      LMAP reports on 32-bits platforms with 64-bits time_t, and avoids
+      either a SIGBUS crash or corrupted (but safe) queue file names on
+      these platforms.
+    * lmapctl: fix local timezone handling in data.c::set_dateandtime().
+      * Fix set_dateandtime() to correct for the local timezone properly,
+        this fixes "lmapctl status", and also allows one to use "lmapctl
+        report" to generate reports in the local timezone if so desired.
+      * README.md: lmapctl timezone bug has been fixed
+      * tests: add test for localtime timezone handling
+      * tests: use TZ=UTC+00:00 instead of TZ=GMT
+  * Enhancements:
+    * lmapctl: configurable output width for status subcommand.
+      When the output is a terminal, format the list of tags as a block, instead
+      of a single line that overflows the "terminal width".  Add a "wide" mode
+      (command line switch -w) that considers a 132 column terminal by default,
+      or accepts an optional option argument with the terminal width, and can
+      be used to force the terminal output even when stdout is redirected.
+  * Other changes:
+    * source: remove .travis.yml.
+    * README, README.simet-lmapd: minor updates
+    * source: .gitignore: add some patterns.
+  * Code cleanup, bitrot removal, and compiler-warning-driven cleanups:
+    * lmapd: fix typo in fallthrough comment
+    * lmapd: add just-in-case null guards to pidfile, atexit() callback
+    * source: silence unused parameter warnings
+    * source: all function declarations should be full prototypes
+    * tests: annotate all functions as static
+    * tests: use ck_assert_uint_* for unsigned values
+    * tests: add missing const qualifiers
+    * tests: fix harmless memory leaks right before process exit
+    * lmapd: avoid some int/uint comparisons
+    * source: remove duplicate declaration of timezone
+    * source: add missing const qualifiers
+    * source: remove or audit every integer size conversion in data.c
+    * csv: explicitly deal with int to char conversions
+    * json: fix uninitialized use of jerr in parse_file(), CID 550578
+    * json: fix read() retry loops on EINTR
+    * json: use the correct type on json-c array iteration loops
+    * json: add missing const qualifiers
+    * json: use the correct helper for rendering uint32_t
+    * json: don't use int16_t (short) for math, use int instead
+    * json: silence possible warning for ssize_t to int conversion
+    * xml: add missing const qualifiers
+    * xml: don't pass size_t strlen() unchecked to xmlParseMemory(int)
+    * xml: use the correct helper for rendering uint32_t
+    * xml: don't use int16_t (short) for math, use int instead
+    * xml: remove shadowing of a local variable
+    * lmap.h: avoid signal conversion for flags
+    * lmapd, lmapctl: remove shadowing of global lmapd variable
+    * lmapctl: add missing const qualifiers to char*
+    * lmapctl: do not use the snprintf "%d" format for uint32_t
+    * lmapd: avoid harmless type conversion warning
+    * lmapd: refactor workspace::du and use the appropriate types
+    * lmapd: avoid conversion to unsigned narrow type
+    * lmapd: minor refactoring to allow snprintf() analysis
+    * csv: ENOMEM errorpath fixes.
+    * csv, workspace: error handling for csv_next(), csv_next_key_value()
+    * data: ENOMEM errorpath fixes.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 06 May 2025 06:45:42 -0300
+
 simet-lmapd (0.15.5) unstable; urgency=medium
 
   * simet-lmapd 0.15.5, based on lmapd 0.4.1 commit
