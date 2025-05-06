@@ -150,12 +150,14 @@ set_int32(int32_t *ip, const char *s, const char *func)
     intmax_t i;
     char *end;
 
+    UNUSED(func);
+
     i = strtoimax(s, &end, 10);
-    if (*end || i > INT32_MAX) {
+    if (*end || i > INT32_MAX || i < INT32_MIN) {
 	lmap_err("illegal int32 value '%s'", s);
 	return -1;
     }
-    *ip = i;
+    *ip = (int32_t)i; /* verified: INT32_MIN <= i <= INT32_MAX */
     return 0;
 }
 
@@ -165,12 +167,14 @@ set_uint32(uint32_t *up, const char *s, const char *func)
     uintmax_t u;
     char *end;
 
+    UNUSED(func);
+
     u = strtoumax(s, &end, 10);
     if (*end || u > UINT32_MAX) {
 	lmap_err("illegal uint32 value '%s'", s);
 	return -1;
     }
-    *up = u;
+    *up = (uint32_t)u; /* verified: 0 <= u <= UINT32_MAX */
     return 0;
 }
 
@@ -179,6 +183,8 @@ set_uint64(uint64_t *up, const char *s, const char *func)
 {
     uintmax_t u;
     char *end;
+
+    UNUSED(func);
 
     u = strtoumax(s, &end, 10);
     if (*end || u > UINT64_MAX) {
@@ -193,7 +199,7 @@ static int
 set_timezoneoffset(int16_t *ip, const char *s)
 {
     size_t len;
-    int hours, minutes;
+    int hours, minutes, tzo;
 
     len = strlen(s);
 
@@ -214,10 +220,11 @@ set_timezoneoffset(int16_t *ip, const char *s)
 	return -1;
     }
 
-    *ip = hours * 60 + minutes;
+    tzo = hours * 60 + minutes;
     if (s[0] == '-') {
-	*ip *= -1;
+	tzo = -tzo;
     }
+    *ip = (int16_t)(tzo); /* verified, -23 <= hours <= 23, 0 <= mintus <= 59 */
     return 0;
 }
 
@@ -228,7 +235,6 @@ set_dateandtime(time_t *tp, const char *s, const char *func)
     time_t t;
     char *end;
     int16_t offset;
-    extern long timezone;
 
     /*
      * Do not use %z in strptime() since this is not portable.  It
@@ -240,9 +246,7 @@ set_dateandtime(time_t *tp, const char *s, const char *func)
     memset(&tm, 0, sizeof(struct tm));
     end = strptime(s, "%Y-%m-%dT%T", &tm);
     if (end == NULL) {
-    error:
-	lmap_log(LOG_ERR, func, "illegal date and time value '%s'", s);
-	return -1;
+	goto error;
     }
 
     /*
@@ -256,14 +260,27 @@ set_dateandtime(time_t *tp, const char *s, const char *func)
 	goto error;
     }
 
+#ifdef HAVE_TIMEGM
+    t = timegm(&tm);
+    if (t == -1) {
+	lmap_log(LOG_ERR, func, "time conversion failed");
+	return -1;
+    }
+    *tp = t - (offset * 60);
+#else
     t = mktime(&tm);
     if (t == -1) {
 	lmap_log(LOG_ERR, func, "time conversion failed");
 	return -1;
     }
-    *tp = (t - (offset * 60) + timezone);
+    /* t_utc = mktime() - timezone */
+    *tp = t - timezone - (offset * 60);
+#endif
     return 0;
 
+error:
+    lmap_log(LOG_ERR, func, "illegal date and time value '%s'", s);
+    return -1;
 }
 
 static int
@@ -798,6 +815,7 @@ lmap_capability_valid(struct lmap *lmap, struct capability *capability)
     int valid = 1;
 
     UNUSED(lmap);
+    UNUSED(capability); /* FIXME? */
 
     return valid;
 }
@@ -1023,7 +1041,9 @@ lmap_supp_new(void)
     struct supp *supp;
 
     supp = (struct supp*) xcalloc(1, sizeof(struct supp), __FUNCTION__);
-    supp->state = LMAP_SUPP_STATE_ENABLED;
+    if (supp) {
+	supp->state = LMAP_SUPP_STATE_ENABLED;
+    }
     return supp;
 }
 
@@ -1256,10 +1276,10 @@ lmap_event_set_type(struct event *event, const char *value)
 {
     int i;
 
-    struct {
-	char *name;
-	int type;
-    }  tab[] = {
+    const struct {
+	const char * const name;
+	const int type;
+    } tab[] = {
 	{ "periodic",			LMAP_EVENT_TYPE_PERIODIC },
 	{ "calendar",			LMAP_EVENT_TYPE_CALENDAR },
 	{ "one-off",			LMAP_EVENT_TYPE_ONE_OFF },
@@ -1333,7 +1353,7 @@ lmap_event_set_random_spread(struct event *event, const char *value)
     ret = set_uint32(&event->random_spread, value, __FUNCTION__);
     if (ret == 0) {
 	if (event->random_spread >= RAND_MAX) {
-	    lmap_err("random_spread must be smaller than %u", RAND_MAX);
+	    lmap_err("random_spread must be smaller than %d", RAND_MAX);
 	    return -1;
 	} else {
 	    event->flags |= LMAP_EVENT_FLAG_RANDOM_SPREAD_SET;
@@ -1359,9 +1379,9 @@ lmap_event_add_month(struct event *event, const char *value)
 {
     int i;
 
-    struct {
-	char *name;
-	uint16_t value;
+    const struct {
+	const char * const name;
+	const uint16_t value;
     } tab[] = {
 	{ "*",		UINT16_MAX },
 	{ "january",	(1 << 0) },
@@ -1419,7 +1439,7 @@ lmap_event_add_day_of_week(struct event *event, const char *value)
     int i;
 
     struct {
-	char *name;
+	const char * const name;
 	uint8_t value;
     } tab[] = {
 	{ "*",		UINT8_MAX },
@@ -1701,8 +1721,10 @@ lmap_schedule_new(void)
     struct schedule *schedule;
 
     schedule = (struct schedule*) xcalloc(1, sizeof(struct schedule), __FUNCTION__);
-    schedule->mode = LMAP_SCHEDULE_EXEC_MODE_PIPELINED;
-    schedule->state = LMAP_SCHEDULE_STATE_ENABLED;
+    if (schedule) {
+	schedule->mode = LMAP_SCHEDULE_EXEC_MODE_PIPELINED;
+	schedule->state = LMAP_SCHEDULE_STATE_ENABLED;
+    }
     return schedule;
 }
 
@@ -1944,7 +1966,9 @@ lmap_action_new(void)
     struct action *action;
 
     action = (struct action*) xcalloc(1, sizeof(struct action), __FUNCTION__);
-    action->state = LMAP_ACTION_STATE_ENABLED;
+    if (action) {
+	action->state = LMAP_ACTION_STATE_ENABLED;
+    }
     return action;
 }
 
@@ -2199,6 +2223,9 @@ lmapd_add_config_path(struct lmapd *lmapd, const char *value)
 	    (*tail)->next = NULL;
 	}
 	if (!(*tail) || !(*tail)->path) {
+	    if (*tail) {
+		xfree((*tail)->path);
+	    }
 	    xfree(*tail);
 	    *tail = NULL;
 	    lmap_log(LOG_ERR, __FUNCTION__,  "failed to allocate memory");

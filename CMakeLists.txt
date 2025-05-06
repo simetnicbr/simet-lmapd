@@ -11,6 +11,25 @@ option(BUILD_XML   "Build with XML support (requires libxml2)" ON)
 # Get some extra flexibility so that our defaults are less awkward
 include(GNUInstallDirs)
 
+# Get better libc where available
+add_definitions(-D_GNU_SOURCE)
+
+# platform-dependent functionality
+include(CheckSymbolExists)
+set(CMAKE_REQUIRED_DEFINITIONS "-D_GNU_SOURCE")
+check_symbol_exists("closefrom" unistd.h HAVE_CLOSEFROM)
+if(${HAVE_CLOSEFROM})
+	add_definitions(-DHAVE_CLOSEFROM)
+endif()
+check_symbol_exists("close_range" unistd.h HAVE_CLOSE_RANGE)
+if(${HAVE_CLOSE_RANGE})
+	add_definitions(-DHAVE_CLOSE_RANGE)
+endif()
+check_symbol_exists("timegm" time.h HAVE_TIMEGM)
+if(${HAVE_TIMEGM})
+	add_definitions(-DHAVE_TIMEGM)
+endif()
+
 # experimental code coverage stuff...
 #set(CMAKE_CXX_FLAGS "-g -O0 -Wall -fprofile-arcs -ftest-coverage")
 #set(CMAKE_C_FLAGS "-g -O0 -Wall -W -fprofile-arcs -ftest-coverage")

@@ -48,6 +48,7 @@
 #include <errno.h>
 
 #include <json.h>
+#include <json_c_version.h>
 
 #include "lmap.h"
 #include "utils.h"
@@ -72,6 +73,13 @@
 typedef int (lmap_json_file_parse_func)(struct lmap *, const char *);
 typedef int (lmap_parse_doc_func)(struct lmap *, json_object *);
 
+/* json array index/length type, int on JSON-C <= 0.12.1, size_t otherwise */
+#if (JSON_C_MAJOR_VERSION == 0 && JSON_C_MINOR_VERSION <= 12)
+    typedef int jsonarray_len_type;
+#else
+    typedef size_t jsonarray_len_type;
+#endif
+
 /*
  * Process the parsed JSON data structure
  */
@@ -83,13 +91,13 @@ typedef int (lmap_jsonmap_strhdl_func)(void *, const char *);
 typedef int (lmap_jsonmap_objhdl_func)(void *, json_object *, int);
 
 struct lmap_jsonmap {
-    char *name;          /* NULL for EOT */
-    enum json_type type; /* type_null for any type */
-    int flags;           /* JSONHANDLEMAP_*, YANG_* bitmask */
+    const char * const name;          /* NULL for EOT */
+    const enum json_type type; /* type_null for any type */
+    const int flags;           /* JSONHANDLEMAP_*, YANG_* bitmask */
     /* main handler for this node */
     union {
-      lmap_jsonmap_objhdl_func *jobj_handler;
-      lmap_jsonmap_strhdl_func *str_handler;
+      lmap_jsonmap_objhdl_func * const jobj_handler;
+      lmap_jsonmap_strhdl_func * const str_handler;
     };
 };
 
@@ -216,7 +224,7 @@ lookup_jsonmap(void *ctx, int ctx_flags,
     json_object *jo;
     const char *jos;
     int res = 0;
-    int i;
+    jsonarray_len_type i, al;
 
     assert(table);
 
@@ -243,7 +251,7 @@ lookup_jsonmap(void *ctx, int ctx_flags,
 	    if (json_object_get_type(obj) == json_type_array &&
 		    table->flags & JSONHANDLEMAP_ARRAYITER) {
 		if (table->jobj_handler) {
-		    for (i = 0; !res && i < json_object_array_length(obj); i++) {
+		    for (i = 0, al = json_object_array_length(obj); !res && i < al; i++) {
 			jo = json_object_array_get_idx(obj, i);
 			if (table->flags & JSONHANDLEMAP_STRHDLR) {
 			    /* We might need a flag if we want to stringify JSON nodes */
@@ -486,7 +494,8 @@ parse_tasks(void *p, json_object *ctx, int what, task_item_add_func *task_add)
 {
     json_object *task_obj = NULL;
     struct task *task;
-    int res, i;
+    jsonarray_len_type i, al;
+    int res;
 
     /* ctx must be an object with a single field "task", which is an array */
     if (!ctx)
@@ -498,7 +507,7 @@ parse_tasks(void *p, json_object *ctx, int what, task_item_add_func *task_add)
 	return -1;
 
     /* iterate the inner "task" array */
-    for (res = 0, i = 0; !res && i < json_object_array_length(task_obj); i++) {
+    for (res = 0, i = 0, al = json_object_array_length(task_obj); !res && i < al; i++) {
 	task = parse_task(json_object_array_get_idx(task_obj, i), what);
 	res = (task)? 0 : -1;
 	if (!res)
@@ -677,7 +686,7 @@ static int xx_lcec_timezone_offset(void *p, const char *s)
 
 static int
 xx_lcee(void *p, json_object *ctx, int what,
-        char* type, const struct lmap_jsonmap *tab)
+        const char *type, const struct lmap_jsonmap *tab)
 {
     struct event *event = p;
     int res = -1;
@@ -741,7 +750,7 @@ xx_lcee_one_off(void *p, json_object *ctx, int what)
 }
 
 static int
-xx_lceez(void *p, json_object *ctx, char *type)
+xx_lceez(void *p, json_object *ctx, const char *type)
 {
     struct event *event = p;
 
@@ -823,7 +832,8 @@ xx_lctrl_events(void *p, json_object *ctx, int what)
     json_object *event_obj = NULL;
     struct lmap *lmap = p;
     struct event *event;
-    int res, i;
+    jsonarray_len_type i, al;
+    int res;
 
     /* ctx must be an object with a single field "event", which is an array */
     if (!ctx)
@@ -835,7 +845,7 @@ xx_lctrl_events(void *p, json_object *ctx, int what)
 	return -1;
 
     /* iterate the inner "event" array */
-    for (res = 0, i = 0; !res && i < json_object_array_length(event_obj); i++) {
+    for (res = 0, i = 0, al = json_object_array_length(event_obj); !res && i < al; i++) {
 	event = parse_event(json_object_array_get_idx(event_obj, i), what);
 	res = (event)? 0 : -1;
 	if (!res)
@@ -911,7 +921,8 @@ xx_lctrl_suppressions(void *p, json_object *ctx, int what)
     json_object *supp_obj = NULL;
     struct lmap *lmap = p;
     struct supp *supp;
-    int res, i;
+    jsonarray_len_type i, al;
+    int res;
 
     /* ctx must be an object with a single field "suppression", which is an array */
     if (!ctx)
@@ -923,7 +934,7 @@ xx_lctrl_suppressions(void *p, json_object *ctx, int what)
 	return -1;
 
     /* iterate the inner "suppression" array */
-    for (res = 0, i = 0; !res && i < json_object_array_length(supp_obj); i++) {
+    for (res = 0, i = 0, al = json_object_array_length(supp_obj); !res && i < al; i++) {
 	supp = parse_suppression(json_object_array_get_idx(supp_obj, i), what);
 	res = (supp)? 0 : -1;
 	if (!res)
@@ -1170,7 +1181,8 @@ xx_lctrl_schedules(void *p, json_object *ctx, int what)
     json_object *schedule_obj = NULL;
     struct lmap *lmap = p;
     struct schedule *schedule;
-    int res, i;
+    jsonarray_len_type i, al;
+    int res;
 
     /* ctx must be an object with a single field "schedule", which is an array */
     if (!ctx)
@@ -1182,7 +1194,7 @@ xx_lctrl_schedules(void *p, json_object *ctx, int what)
 	return -1;
 
     /* iterate the inner "schedule" array */
-    for (res = 0, i = 0; !res && i < json_object_array_length(schedule_obj); i++) {
+    for (res = 0, i = 0, al = json_object_array_length(schedule_obj); !res && i < al; i++) {
 	schedule = parse_schedule(json_object_array_get_idx(schedule_obj, i), what);
 	res = (schedule)? 0 : -1;
 	if (!res)
@@ -1572,7 +1584,7 @@ parse_file(const char *file, const char *what)
     ssize_t res = -1;
     int fd = -1;
 
-    enum json_tokener_error jerr;
+    enum json_tokener_error jerr = json_tokener_error_parse_eof;
     json_object *jo  = NULL;
     struct json_tokener *jtk = NULL;
 
@@ -1591,17 +1603,16 @@ parse_file(const char *file, const char *what)
 
     json_tokener_set_flags(jtk, JSON_TOKENER_STRICT);
     do {
-	res = read(fd, buf, JSON_READ_BUFFER_SZ);
+	do {
+	    res = read(fd, buf, JSON_READ_BUFFER_SZ);
+	} while (res == -1 && (errno == EAGAIN || errno == EINTR));
 	if (res == -1) {
-	    if (errno == EAGAIN || errno == EINTR)
-		continue;
-
 	    lmap_err("error while reading '%s': %s", file, strerror(errno));
 	    goto res_out; /* res = -1 already */
 	}
 
 	if (res > 0) {
-	    jo = json_tokener_parse_ex(jtk, buf, res); /* res clamped to ( 0, JSON_READ_BUFFER_SZ ] */
+	    jo = json_tokener_parse_ex(jtk, buf, (int)res); /* res clamped to ( 0, JSON_READ_BUFFER_SZ ] */
 	    jerr = json_tokener_get_error(jtk);
 	}
     } while (res > 0 && jerr == json_tokener_continue);
@@ -1766,7 +1777,7 @@ lmap_json_parse_task_results_fd(int fd, struct result *result)
     char *buf = NULL;
     ssize_t res;
     int rc = -1;
-    int i;
+    jsonarray_len_type i, al;
 
     enum json_tokener_error jerr;
     json_object *jobj = NULL;
@@ -1787,16 +1798,16 @@ lmap_json_parse_task_results_fd(int fd, struct result *result)
 
     jerr = json_tokener_success;
     do {
-	res = read(fd, buf, JSON_READ_BUFFER_SZ);
+	do {
+	    res = read(fd, buf, JSON_READ_BUFFER_SZ);
+	} while (res == -1 && (errno == EAGAIN || errno == EINTR));
 	if (res == -1) {
-	    if (errno == EAGAIN || errno == EINTR)
-		continue;
 	    lmap_err("error while reading report data file: %s", strerror(errno));
 	    goto err_exit;
 	}
 
 	if (res > 0) {
-	    jobj = json_tokener_parse_ex(jtk, buf, res); /* res clamped to ( 0, JSON_READ_BUFFER_SZ ] */
+	    jobj = json_tokener_parse_ex(jtk, buf, (int)res); /* res clamped to ( 0, JSON_READ_BUFFER_SZ ] */
 	    jerr = json_tokener_get_error(jtk);
 	}
     } while (jerr == json_tokener_continue && res > 0);
@@ -1810,7 +1821,7 @@ lmap_json_parse_task_results_fd(int fd, struct result *result)
 	}
 	while (jobj) {
 	    if (json_object_is_type(jobj, json_type_array)) {
-		for (i = 0; i < json_object_array_length(jobj); i++) {
+		for (i = 0, al = json_object_array_length(jobj); i < al; i++) {
 		    jo = json_object_array_get_idx(jobj, i);
 		    if (parse_report_result_table(result, jo, 0))
 			break;
@@ -1869,7 +1880,7 @@ json_object_objarray_add(json_object *jobj,
 }
 
 static void
-render_empty_leaf(json_object *jobj, char *name)
+render_empty_leaf(json_object *jobj, const char * const name)
 {
     /* RFC7951 section 6.9 maps YANG empty to [null] */
     json_object *ja = json_object_new_array();
@@ -1880,7 +1891,7 @@ render_empty_leaf(json_object *jobj, char *name)
 }
 
 static void
-render_leaf(json_object *jobj, char *name, char *content)
+render_leaf(json_object *jobj, const char *name, const char * const content)
 {
     assert(jobj);
 
@@ -1890,7 +1901,7 @@ render_leaf(json_object *jobj, char *name, char *content)
 }
 
 static void
-render_leaf_boolean(json_object *jobj, char *name, int content)
+render_leaf_boolean(json_object *jobj, const char * const name, const int content)
 {
     assert(jobj);
 
@@ -1901,13 +1912,13 @@ render_leaf_boolean(json_object *jobj, char *name, int content)
 }
 
 static void
-render_leaf_int32(json_object *jobj, char *name, int32_t value)
+render_leaf_int32(json_object *jobj, const char * const name, int32_t value)
 {
     json_object_objarray_add(jobj, name, json_object_new_int(value));
 }
 
 static void
-render_leaf_uint32(json_object *jobj, char *name, uint32_t value)
+render_leaf_uint32(json_object *jobj, const char * const name, uint32_t value)
 {
     /* JSON-C does not know uint32, but int64 can hold an uint32 */
     json_object_objarray_add(jobj, name, json_object_new_int64(value));
@@ -1916,7 +1927,7 @@ render_leaf_uint32(json_object *jobj, char *name, uint32_t value)
 #if 0
 /* I-JSON demands this */
 static void
-render_leaf_int64(json_object *jobj, char *name, int64_t value)
+render_leaf_int64(json_object *jobj, const char * const name, int64_t value)
 {
     char buf[64];
     snprintf(buf, sizeof(buf), "%"PRIi64, value);
@@ -1926,7 +1937,7 @@ render_leaf_int64(json_object *jobj, char *name, int64_t value)
 
 /* I-JSON demands this */
 static void
-render_leaf_uint64(json_object *jobj, char *name, uint64_t value)
+render_leaf_uint64(json_object *jobj, const char * const name, uint64_t value)
 {
     char buf[64];
     snprintf(buf, sizeof(buf), "%"PRIu64, value);
@@ -1934,7 +1945,7 @@ render_leaf_uint64(json_object *jobj, char *name, uint64_t value)
 }
 
 static void
-render_leaf_datetime(json_object *jobj, char *name, time_t *tp)
+render_leaf_datetime(json_object *jobj, const char * const name, time_t *tp)
 {
     char buf[32];
     struct tm *tmp;
@@ -1958,7 +1969,7 @@ render_leaf_datetime(json_object *jobj, char *name, time_t *tp)
 }
 
 static void
-render_leaf_days_of_month(json_object *jobj, char *name, uint32_t days_of_month)
+render_leaf_days_of_month(json_object *jobj, const char * const name, uint32_t days_of_month)
 {
     int i;
     json_object *ja;
@@ -1984,13 +1995,13 @@ render_leaf_days_of_month(json_object *jobj, char *name, uint32_t days_of_month)
 }
 
 static void
-render_leaf_months(json_object *jobj, char *name, uint16_t months)
+render_leaf_months(json_object *jobj, const char * const name, uint16_t months)
 {
     json_object *ja;
     int i;
-    struct {
-	char *name;
-	uint16_t value;
+    const struct {
+	const char * const name;
+	const uint16_t value;
     } tab[] = {
 	{ "january",	(1 << 0) },
 	{ "february",	(1 << 1) },
@@ -2028,13 +2039,13 @@ render_leaf_months(json_object *jobj, char *name, uint16_t months)
 }
 
 static void
-render_leaf_days_of_week(json_object *jobj, char *name, uint8_t days_of_week)
+render_leaf_days_of_week(json_object *jobj, const char * const name, uint8_t days_of_week)
 {
     json_object *ja;
     int i;
-    struct {
-	char *name;
-	uint8_t value;
+    const struct {
+	const char * const name;
+	const uint8_t value;
     } tab[] = {
 	{ "monday",	(1 << 0) },
 	{ "tuesday",	(1 << 1) },
@@ -2067,7 +2078,7 @@ render_leaf_days_of_week(json_object *jobj, char *name, uint8_t days_of_week)
 }
 
 static void
-render_leaf_hours(json_object *jobj, char *name, uint32_t hours)
+render_leaf_hours(json_object *jobj, const char * const name, uint32_t hours)
 {
     int i;
     json_object *ja;
@@ -2093,7 +2104,7 @@ render_leaf_hours(json_object *jobj, char *name, uint32_t hours)
 }
 
 static void
-render_leaf_minsecs(json_object *jobj, char *name, uint64_t minsecs)
+render_leaf_minsecs(json_object *jobj, const char * const name, uint64_t minsecs)
 {
     int i;
     json_object *ja;
@@ -2119,7 +2130,7 @@ render_leaf_minsecs(json_object *jobj, char *name, uint64_t minsecs)
 }
 
 static void
-render_tags(struct tag *tags, const char *name, json_object *jobj)
+render_tags(struct tag *tags, const char * const name, json_object *jobj)
 {
     json_object *ja;
     struct tag *t;
@@ -2391,7 +2402,7 @@ render_action(struct action *action, json_object *jobj, int what)
 	render_tags(action->suppression_tags, "suppression-tag", jobj);
     }
     if (what & RENDER_CONFIG_FALSE) {
-	char *state = NULL;
+	const char *state = NULL;
 	switch (action->state) {
 	case LMAP_ACTION_STATE_ENABLED:
 	    state = "enabled";
@@ -2494,7 +2505,7 @@ render_schedules(struct schedule *schedule, json_object *jobj, int what)
 	    if (schedule->flags & LMAP_SCHEDULE_FLAG_DURATION_SET)
 		render_leaf_uint64(js, "duration", schedule->duration);
 	    if (schedule->flags & LMAP_SCHEDULE_FLAG_EXEC_MODE_SET) {
-		char *mode = NULL;
+		const char *mode = NULL;
 		switch (schedule->mode) {
 		case LMAP_SCHEDULE_EXEC_MODE_SEQUENTIAL:
 		    mode = "sequential";
@@ -2512,7 +2523,7 @@ render_schedules(struct schedule *schedule, json_object *jobj, int what)
 	    render_tags(schedule->suppression_tags, "suppression-tag", js);
 	}
 	if (what & RENDER_CONFIG_FALSE) {
-	    char *state = NULL;
+	    const char *state = NULL;
 	    switch (schedule->state) {
 	    case LMAP_SCHEDULE_STATE_ENABLED:
 		state = "enabled";
@@ -2580,7 +2591,7 @@ render_suppressions(struct supp *supp, json_object *jobj, int what)
 		render_leaf_boolean(js, "stop-running", supp->stop_running);
 	}
 	if (what & RENDER_CONFIG_FALSE) {
-	    char *state = NULL;
+	    const char *state = NULL;
 	    switch (supp->state) {
 	    case LMAP_SUPP_STATE_ENABLED:
 		state = "enabled";
@@ -2691,9 +2702,9 @@ render_events(struct event *event, json_object *jobj, int what)
 	render_leaf(je, "name", event->name);
 	if (what & RENDER_CONFIG_TRUE) {
 	    if (event->flags & LMAP_EVENT_FLAG_RANDOM_SPREAD_SET)
-		render_leaf_int32(je, "random-spread", event->random_spread);
+		render_leaf_uint32(je, "random-spread", event->random_spread);
 	    if (event->flags & LMAP_EVENT_FLAG_CYCLE_INTERVAL_SET)
-		render_leaf_int32(je, "cycle-interval", event->cycle_interval);
+		render_leaf_uint32(je, "cycle-interval", event->cycle_interval);
 	    switch (event->type) {
 	    case LMAP_EVENT_TYPE_PERIODIC:
 		if (!(jsub = json_object_new_object()))
@@ -2719,8 +2730,8 @@ render_events(struct event *event, json_object *jobj, int what)
 		if (event->flags & LMAP_EVENT_FLAG_TIMEZONE_OFFSET_SET) {
 		    char buf[42];
 		    char c = (event->timezone_offset < 0) ? '-' : '+';
-		    int16_t offset = event->timezone_offset;
-		    offset = (offset < 0) ? -1 * offset : offset;
+		    int offset = event->timezone_offset;
+		    offset = (offset < 0) ? -offset : offset;
 		    snprintf(buf, sizeof(buf), "%c%02d:%02d",
 			     c, offset / 60, offset % 60);
 		    render_leaf(jsub, "timezone-offset", buf);

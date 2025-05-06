@@ -39,6 +39,8 @@
 #include "runner.h"
 #include "signals.h"
 
+#define UNUSED(x) (void)(x)
+
 #if 1
 static void
 event_gaga(struct event *event, struct event **ev,
@@ -81,7 +83,7 @@ safe_event_free(struct event * event)
 static unsigned int
 rand_interval(unsigned int min, unsigned int max)
 {
-    int r;
+    unsigned int r;
     const unsigned int range = 1 + max - min;
     const unsigned int buckets = RAND_MAX / range;
     const unsigned int limit = buckets * range;
@@ -90,7 +92,7 @@ rand_interval(unsigned int min, unsigned int max)
      * the buckets until you land in one of them. All buckets are equally
      * likely. If you land off the end of the line of buckets, try again. */
     do {
-	r = rand();
+	r = (unsigned int)rand();
     } while (r >= limit);
 
     return min + (r / buckets);
@@ -400,6 +402,7 @@ static void
 action_kill(struct lmapd *lmapd, struct action *action)
 {
     assert(lmapd);
+    UNUSED(lmapd);
 
     if (!action || !action->name) {
 	return;
@@ -996,9 +999,9 @@ lmapd_run(struct lmapd *lmapd)
     struct timeval one_sec = { .tv_sec = 1, .tv_usec = 0 };
 
     struct {
-	char *name;
-	int signum;
-	void (*func)(evutil_socket_t sig, short events, void *context);
+	const char * const name;
+	const int signum;
+	void (* const func)(evutil_socket_t sig, short events, void *context);
 	struct event *event;
     } tab[] = {
 	{ "SIGINT",	SIGINT,		lmapd_sigint_cb,	NULL },
@@ -1085,8 +1088,8 @@ lmapd_run(struct lmapd *lmapd)
 		}
 		if (event->flags & LMAP_EVENT_FLAG_START_SET) {
 		    if (now > event->start) {
-			uint32_t delta = (now - event->start) / event->interval;
-			tv.tv_sec = (event->start + (delta + 1) * event->interval) - now;
+			int64_t delta = (now - event->start) / event->interval;
+			tv.tv_sec = (time_t)((event->start + (delta + 1) * event->interval) - now);
 		    } else {
 			tv.tv_sec = event->start - now;
 		    }
@@ -1119,7 +1122,7 @@ lmapd_run(struct lmapd *lmapd)
 		    lmap_dbg("skipping startup event '%s' on restart", event->name);
 		    break;
 		}
-		/* falltrough */
+		/* fallthrough */
 	    case LMAP_EVENT_TYPE_IMMEDIATE:
 		add_random_spread(event, &tv);
 		event_gaga(event, &event->fire_event, EV_TIMEOUT, fire_cb, &tv);

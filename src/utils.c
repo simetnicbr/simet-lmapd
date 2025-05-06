@@ -51,7 +51,7 @@ void lmap_set_log_handler(lmap_log_handler handler)
 
 void lmap_vlog_default(int level, const char *func, const char *format, va_list args)
 {
-    char *level_name = NULL;
+    const char *level_name = NULL;
 
     if (isatty(STDERR_FILENO)) {
 	fprintf(stderr, "lmapd[%d]: ", getpid());

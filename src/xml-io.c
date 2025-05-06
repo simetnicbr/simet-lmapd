@@ -49,6 +49,8 @@
 #define YANG_CONFIG_FALSE	0x02
 #define YANG_KEY		0x04
 
+#define UNUSED(x) (void)(x)
+
 /**
  * @brief Parses the agent information
  * @details Function to parse the agent object information from the XML config
@@ -63,10 +65,10 @@ parse_agent(struct lmap *lmap, xmlXPathContextPtr ctx, int what)
 
     const char *xpath = "//lmapc:lmap/lmapc:agent/lmapc:*";
 
-    struct {
-	char *name;
-	int flags;
-	int (*func)(struct agent *a, const char *c);
+    const struct {
+	const char * const name;
+	const int flags;
+	int (* const func)(struct agent *a, const char *c);
     } tab[] = {
 	{ .name = "agent-id",
 	  .flags = YANG_CONFIG_TRUE,
@@ -149,10 +151,10 @@ parse_suppression(xmlNodePtr supp_node, int what)
     xmlNodePtr node;
     struct supp *supp;
 
-    struct {
-	char *name;
-	int flags;
-	int (*func)(struct supp *s, const char *c);
+    const struct {
+	const char * const name;
+	const int flags;
+	int (* const func)(struct supp *s, const char *c);
     } tab[] = {
 	{ .name = "name",
 	  .flags = YANG_CONFIG_TRUE | YANG_KEY,
@@ -248,10 +250,10 @@ parse_option(xmlNodePtr option_node, int what)
     xmlNodePtr node;
     struct option *option;
 
-    struct {
-	char *name;
-	int flags;
-	int (*func)(struct option *s, const char *c);
+    const struct {
+	const char * const name;
+	const int flags;
+	int (* const func)(struct option *s, const char *c);
     } tab[] = {
 	{ .name = "id",
 	  .flags = YANG_CONFIG_TRUE,
@@ -304,10 +306,10 @@ parse_registry(xmlNodePtr registry_node, int what)
     xmlNodePtr node;
     struct registry *registry;
 
-    struct {
-	char *name;
-	int flags;
-	int (*func)(struct registry *s, const char *c);
+    const struct {
+	const char * const name;
+	const int flags;
+	int (* const func)(struct registry *s, const char *c);
     } tab[] = {
 	{ .name = "uri",
 	  .flags = YANG_CONFIG_TRUE,
@@ -357,10 +359,10 @@ parse_task(xmlNodePtr task_node, int what)
     xmlNodePtr node;
     struct task *task;
 
-    struct {
-	char *name;
-	int flags;
-	int (*func)(struct task *s, const char *c);
+    const struct {
+	const char * const name;
+	const int flags;
+	int (* const func)(struct task *s, const char *c);
     } tab[] = {
 	{ .name = "name",
 	  .flags = YANG_CONFIG_TRUE,
@@ -459,10 +461,10 @@ parse_capability_task(xmlNodePtr task_node, int what)
     xmlNodePtr node;
     struct task *task;
 
-    struct {
-	char *name;
-	int flags;
-	int (*func)(struct task *s, const char *c);
+    const struct {
+	const char * const name;
+	const int flags;
+	int (* const func)(struct task *s, const char *c);
     } tab[] = {
 	{ .name = "name",
 	  .flags = YANG_CONFIG_FALSE,
@@ -570,10 +572,10 @@ parse_capabilities(struct lmap *lmap, xmlXPathContextPtr ctx, int what)
 
     const char *xpath = "//lmapc:lmap/lmapc:capabilities/lmapc:*";
 
-    struct {
-	char *name;
-	int flags;
-	int (*func)(struct capability *a, const char *c);
+    const struct {
+	const char * const name;
+	const int flags;
+	int (* const func)(struct capability *a, const char *c);
     } tab[] = {
 	{ .name = "version",
 	  .flags = YANG_CONFIG_FALSE,
@@ -641,10 +643,10 @@ parse_periodic(struct event *event, xmlNodePtr period_node, int what)
     int j;
     xmlNodePtr node;
 
-    struct {
-	char *name;
-	int flags;
-	int (*func)(struct event *e, const char *c);
+    const struct {
+	const char * const name;
+	const int flags;
+	int (* const func)(struct event *e, const char *c);
     } tab[] = {
 	{ .name = "interval",
 	  .flags = YANG_CONFIG_TRUE,
@@ -689,10 +691,10 @@ parse_calendar(struct event *event, xmlNodePtr calendar_node, int what)
     int j;
     xmlNodePtr node;
 
-    struct {
-	char *name;
-	int flags;
-	int (*func)(struct event *e, const char *c);
+    const struct {
+	const char * const name;
+	const int flags;
+	int (* const func)(struct event *e, const char *c);
     } tab[] = {
 	{ .name = "month",
 	  .flags = YANG_CONFIG_TRUE,
@@ -755,16 +757,18 @@ parse_one_off(struct event *event, xmlNodePtr one_off_node, int what)
     int j;
     xmlNodePtr node;
 
-    struct {
-	char *name;
-	int flags;
-	int (*func)(struct event *e, const char *c);
+    const struct {
+	const char * const name;
+	const int flags;
+	int (* const func)(struct event *e, const char *c);
     } tab[] = {
 	{ .name = "time",
 	  .flags = YANG_CONFIG_TRUE,
 	  .func = lmap_event_set_start },
 	{ .name = NULL, .flags = 0, .func = NULL }
     };
+
+    UNUSED(what);
 
     for (node = xmlFirstElementChild(one_off_node);
 	 node; node = xmlNextElementSibling(node)) {
@@ -794,11 +798,11 @@ parse_event(xmlNodePtr event_node, int what)
     xmlNodePtr node;
     struct event *event;
 
-    struct {
-	char *name;
-	int flags;
-	int (*func)(struct event *e, const char *c);
-	void (*parse)(struct event *e, xmlNodePtr node, int what);
+    const struct {
+	const char * const name;
+	const int flags;
+	int (* const func)(struct event *e, const char *c);
+	void (* const parse)(struct event *e, xmlNodePtr node, int what);
     } tab[] = {
 	{ .name = "name",
 	  .flags = YANG_CONFIG_TRUE | YANG_KEY,
@@ -923,10 +927,10 @@ parse_action(xmlNodePtr action_node, int what)
     xmlNodePtr node;
     struct action *action;
 
-    struct {
-	char *name;
-	int flags;
-	int (*func)(struct action *s, const char *c);
+    const struct {
+	const char * const name;
+	const int flags;
+	int (* const func)(struct action *s, const char *c);
     } tab[] = {
 	{ .name = "name",
 	  .flags = YANG_CONFIG_TRUE | YANG_KEY,
@@ -1030,10 +1034,10 @@ parse_schedule(xmlNodePtr schedule_node, int what)
     xmlNodePtr node;
     struct schedule *schedule;
 
-    struct {
-	char *name;
-	int flags;
-	int (*func)(struct schedule *e, const char *c);
+    const struct {
+	const char * const name;
+	const int flags;
+	int (* const func)(struct schedule *e, const char *c);
     } tab[] = {
 	{ .name = "name",
 	  .flags = YANG_CONFIG_TRUE | YANG_KEY,
@@ -1158,8 +1162,8 @@ parse_control(struct lmap *lmap, xmlDocPtr doc, int what)
     int i, ret;
     xmlXPathContextPtr ctx = NULL;
 
-    struct {
-	int (*parse)(struct lmap *lmap, xmlXPathContextPtr ctx, int what);
+    const struct {
+	int (* const parse)(struct lmap *lmap, xmlXPathContextPtr ctx, int what);
     } tab[] = {
 	{ parse_capabilities },
 	{ parse_capability_tasks },
@@ -1279,11 +1283,18 @@ int
 lmap_xml_parse_config_string(struct lmap *lmap, const char *string)
 {
     int ret;
+    size_t len;
     xmlDocPtr doc = NULL;
 
     assert(string);
 
-    doc = xmlParseMemory(string, strlen(string));
+    len = strlen(string);
+    if (len > INT_MAX) {
+	ret = -1;
+	goto exit;
+    }
+
+    doc = xmlParseMemory(string, (int)len);  /* verified: 0 <= len <= INT_MAX */
     if (! doc) {
 	lmap_err("cannot parse from string");
 	ret = -1;
@@ -1377,11 +1388,18 @@ int
 lmap_xml_parse_state_string(struct lmap *lmap, const char *string)
 {
     int ret;
+    size_t len;
     xmlDocPtr doc = NULL;
 
     assert(string);
 
-    doc = xmlParseMemory(string, strlen(string));
+    len = strlen(string);
+    if (len > INT_MAX) {
+	ret = -1;
+	goto exit;
+    }
+
+    doc = xmlParseMemory(string, (int)len);  /* verified: 0 <= len <= INT_MAX */
     if (! doc) {
 	lmap_err("cannot parse from string");
 	ret = -1;
@@ -1406,9 +1424,9 @@ parse_report(struct lmap *lmap, xmlXPathContextPtr ctx)
 
     const char *xpath = "//lmapr:report/lmapr:*";
 
-    struct {
-	char *name;
-	int (*func)(struct agent *a, const char *c);
+    const struct {
+	const char * const name;
+	int (* const func)(struct agent *a, const char *c);
     } tab[] = {
 	{ .name = "date",
 	  .func = lmap_agent_set_report_date },
@@ -1565,9 +1583,9 @@ parse_result(xmlNodePtr result_node)
     xmlNodePtr node;
     struct result *res;
 
-    struct {
-	char *name;
-	int (*func)(struct result *r, const char *c);
+    const struct {
+	const char * const name;
+	int (* const func)(struct result *r, const char *c);
     } tab[] = {
 	{ .name = "schedule",
 	  .func = lmap_result_set_schedule },
@@ -1608,8 +1626,8 @@ parse_result(xmlNodePtr result_node)
 	}
 
 	if (!xmlStrcmp(node->name, BAD_CAST "table")) {
-	    struct table *tab = parse_table(node);
-	    lmap_result_add_table(res, tab);
+	    struct table *table = parse_table(node);
+	    lmap_result_add_table(res, table);
 	    continue;
 	}
 
@@ -1671,8 +1689,8 @@ parse_report_doc(struct lmap *lmap, xmlDocPtr doc)
     int i, ret;
     xmlXPathContextPtr ctx = NULL;
 
-    struct {
-	int (*parse)(struct lmap *lmap, xmlXPathContextPtr ctx);
+    const struct {
+	int (* const parse)(struct lmap *lmap, xmlXPathContextPtr ctx);
     } tab[] = {
 	{ parse_report },
 	{ parse_results },
@@ -1739,11 +1757,18 @@ int
 lmap_xml_parse_report_string(struct lmap *lmap, const char *string)
 {
     int ret;
+    size_t len;
     xmlDocPtr doc = NULL;
 
     assert(string);
 
-    doc = xmlParseMemory(string, strlen(string));
+    len = strlen(string);
+    if (len > INT_MAX) {
+	ret = -1;
+	goto exit;
+    }
+
+    doc = xmlParseMemory(string, (int)len);  /* verified: 0 <= len <= INT_MAX */
     if (! doc) {
 	lmap_err("cannot parse from string");
 	ret = -1;
@@ -1761,7 +1786,7 @@ exit:
 }
 
 static void
-render_leaf(xmlNodePtr root, xmlNsPtr ns, char *name, char *content)
+render_leaf(xmlNodePtr root, xmlNsPtr ns, const char *name, const char *content)
 {
     assert(root && ns);
 
@@ -1771,7 +1796,7 @@ render_leaf(xmlNodePtr root, xmlNsPtr ns, char *name, char *content)
 }
 
 static void
-render_leaf_int32(xmlNodePtr root, xmlNsPtr ns, char *name, int32_t value)
+render_leaf_int32(xmlNodePtr root, xmlNsPtr ns, const char *name, int32_t value)
 {
     char buf[32];
 
@@ -1780,7 +1805,7 @@ render_leaf_int32(xmlNodePtr root, xmlNsPtr ns, char *name, int32_t value)
 }
 
 static void
-render_leaf_uint32(xmlNodePtr root, xmlNsPtr ns, char *name, uint32_t value)
+render_leaf_uint32(xmlNodePtr root, xmlNsPtr ns, const char *name, uint32_t value)
 {
     char buf[32];
 
@@ -1789,7 +1814,7 @@ render_leaf_uint32(xmlNodePtr root, xmlNsPtr ns, char *name, uint32_t value)
 }
 
 static void
-render_leaf_uint64(xmlNodePtr root, xmlNsPtr ns, char *name, uint64_t value)
+render_leaf_uint64(xmlNodePtr root, xmlNsPtr ns, const char *name, uint64_t value)
 {
     char buf[64];
 
@@ -1798,7 +1823,7 @@ render_leaf_uint64(xmlNodePtr root, xmlNsPtr ns, char *name, uint64_t value)
 }
 
 static void
-render_leaf_datetime(xmlNodePtr root, xmlNsPtr ns, char *name, time_t *tp)
+render_leaf_datetime(xmlNodePtr root, xmlNsPtr ns, const char *name, time_t *tp)
 {
     char buf[32];
     struct tm *tmp;
@@ -1822,12 +1847,12 @@ render_leaf_datetime(xmlNodePtr root, xmlNsPtr ns, char *name, time_t *tp)
 }
 
 static void
-render_leaf_months(xmlNodePtr root, xmlNsPtr ns, char *name, uint16_t months)
+render_leaf_months(xmlNodePtr root, xmlNsPtr ns, const char *name, uint16_t months)
 {
     int i;
-    struct {
-	char *name;
-	uint16_t value;
+    const struct {
+	const char * const name;
+	const uint16_t value;
     } tab[] = {
 	{ "january",	(1 << 0) },
 	{ "february",	(1 << 1) },
@@ -1857,7 +1882,7 @@ render_leaf_months(xmlNodePtr root, xmlNsPtr ns, char *name, uint16_t months)
 }
 
 static void
-render_leaf_days_of_month(xmlNodePtr root, xmlNsPtr ns, char *name, uint32_t days_of_month)
+render_leaf_days_of_month(xmlNodePtr root, xmlNsPtr ns, const char *name, uint32_t days_of_month)
 {
     int i;
 
@@ -1874,12 +1899,12 @@ render_leaf_days_of_month(xmlNodePtr root, xmlNsPtr ns, char *name, uint32_t day
 }
 
 static void
-render_leaf_days_of_week(xmlNodePtr root, xmlNsPtr ns, char *name, uint8_t days_of_week)
+render_leaf_days_of_week(xmlNodePtr root, xmlNsPtr ns, const char *name, uint8_t days_of_week)
 {
     int i;
-    struct {
-	char *name;
-	uint8_t value;
+    const struct {
+	const char * const name;
+	const uint8_t value;
     } tab[] = {
 	{ "monday",	(1 << 0) },
 	{ "tuesday",	(1 << 1) },
@@ -1904,7 +1929,7 @@ render_leaf_days_of_week(xmlNodePtr root, xmlNsPtr ns, char *name, uint8_t days_
 }
 
 static void
-render_leaf_hours(xmlNodePtr root, xmlNsPtr ns, char *name, uint32_t hours)
+render_leaf_hours(xmlNodePtr root, xmlNsPtr ns, const char *name, uint32_t hours)
 {
     int i;
 
@@ -1921,7 +1946,7 @@ render_leaf_hours(xmlNodePtr root, xmlNsPtr ns, char *name, uint32_t hours)
 }
 
 static void
-render_leaf_minsecs(xmlNodePtr root, xmlNsPtr ns, char *name, uint64_t minsecs)
+render_leaf_minsecs(xmlNodePtr root, xmlNsPtr ns, const char *name, uint64_t minsecs)
 {
     int i;
 
@@ -2072,7 +2097,7 @@ render_action(struct action *action, xmlNodePtr root, xmlNsPtr ns, int what)
 	}
     }
     if (what & RENDER_CONFIG_FALSE) {
-	char *state = NULL;
+	const char *state = NULL;
 	switch (action->state) {
 	case LMAP_ACTION_STATE_ENABLED:
 	    state = "enabled";
@@ -2155,7 +2180,7 @@ render_schedules(struct schedule *schedule, xmlNodePtr root, xmlNsPtr ns, int wh
 		render_leaf_uint64(node, ns, "duration", schedule->duration);
 	    }
 	    if (schedule->flags & LMAP_SCHEDULE_FLAG_EXEC_MODE_SET) {
-		char *mode = NULL;
+		const char *mode = NULL;
 		switch (schedule->mode) {
 		case LMAP_SCHEDULE_EXEC_MODE_SEQUENTIAL:
 		    mode = "sequential";
@@ -2179,7 +2204,7 @@ render_schedules(struct schedule *schedule, xmlNodePtr root, xmlNsPtr ns, int wh
 	    }
 	}
 	if (what & RENDER_CONFIG_FALSE) {
-	    char *state = NULL;
+	    const char *state = NULL;
 	    switch (schedule->state) {
 	    case LMAP_SCHEDULE_STATE_ENABLED:
 		state = "enabled";
@@ -2249,7 +2274,7 @@ render_suppressions(struct supp *supp, xmlNodePtr root, xmlNsPtr ns, int what)
 	    }
 	}
 	if (what & RENDER_CONFIG_FALSE) {
-	    char *state = NULL;
+	    const char *state = NULL;
 	    switch (supp->state) {
 	    case LMAP_SUPP_STATE_ENABLED:
 		state = "enabled";
@@ -2363,10 +2388,10 @@ render_events(struct event *event, xmlNodePtr root, xmlNsPtr ns, int what)
 	render_leaf(node, ns, "name", event->name);
 	if (what & RENDER_CONFIG_TRUE) {
 	    if (event->flags & LMAP_EVENT_FLAG_RANDOM_SPREAD_SET) {
-		render_leaf_int32(node, ns, "random-spread", event->random_spread);
+		render_leaf_uint32(node, ns, "random-spread", event->random_spread);
 	    }
 	    if (event->flags & LMAP_EVENT_FLAG_CYCLE_INTERVAL_SET) {
-		render_leaf_int32(node, ns, "cycle-interval", event->cycle_interval);
+		render_leaf_uint32(node, ns, "cycle-interval", event->cycle_interval);
 	    }
 	    switch (event->type) {
 	    case LMAP_EVENT_TYPE_PERIODIC:
@@ -2410,8 +2435,8 @@ render_events(struct event *event, xmlNodePtr root, xmlNsPtr ns, int what)
 		if (event->flags & LMAP_EVENT_FLAG_TIMEZONE_OFFSET_SET) {
 		    char buf[42];
 		    char c = (event->timezone_offset < 0) ? '-' : '+';
-		    int16_t offset = event->timezone_offset;
-		    offset = (offset < 0) ? -1 * offset : offset;
+		    int offset = event->timezone_offset;
+		    offset = (offset < 0) ? -offset : offset;
 		    snprintf(buf, sizeof(buf), "%c%02d:%02d",
 			     c, offset / 60, offset % 60);
 		    render_leaf(subnode, ns, "timezone-offset", buf);
@@ -2690,6 +2715,9 @@ int
 lmap_xml_parse_task_results_fd(int fd, struct result *result)
 {
     /* FIXME: implement this */
+    UNUSED(fd);
+    UNUSED(result);
+
     lmap_err("parsing of structured task output in XML not implemented yet!");
     return -1;
 }

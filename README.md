@@ -87,7 +87,6 @@ $ genhtml app.info
 
 ### Todo's
 
- - Fix lmapctl timezone bug
  - Implement schedule/duration
  - Implement calendar/timezone-offset
  - Implement pipelined execution mode

@@ -32,6 +32,7 @@
 #include <ftw.h>
 #include <inttypes.h>
 #include <time.h>
+#include <errno.h>
 
 #include "lmap.h"
 #include "lmapd.h"
@@ -52,11 +53,11 @@ static int status_cmd(int argc, char *argv[]);
 static int validate_cmd(int argc, char *argv[]);
 static int version_cmd(int argc, char *argv[]);
 
-static struct
+static const struct
 {
-    char *command;
-    char *description;
-    int (*func) (int argc, char *argv[]);
+    const char * const command;
+    const char * const description;
+    int (* const func) (int argc, char *argv[]);
 } cmds[] = {
     { "clean",    "clean the workspace (be careful!)",      clean_cmd },
     { "config",   "validate and render lmap configuration", config_cmd },
@@ -123,7 +124,7 @@ help(FILE *f)
     }
 }
 
-static char*
+static const char*
 render_datetime_short(time_t *tp)
 {
     static char buf[32];
@@ -165,7 +166,7 @@ render_storage(uint64_t storage)
     return buf;
 }
 
-static char*
+static const char*
 render_datetime_long(time_t *tp)
 {
     static char buf[32];
@@ -225,20 +226,20 @@ render_uint32(uint32_t num)
  */
 
 static int
-read_config(struct lmapd *lmapd)
+read_config(struct lmapd *a_lmapd)
 {
     struct paths *paths;
 
-    lmapd->lmap = lmap_new();
-    if (! lmapd->lmap) {
+    a_lmapd->lmap = lmap_new();
+    if (! a_lmapd->lmap) {
 	return -1;
     }
 
-    paths = lmapd->config_paths;
+    paths = a_lmapd->config_paths;
     while (paths && paths->path) {
-	if (lmap_io_parse_config_path(lmapd->lmap, paths->path)) {
-	    lmap_free(lmapd->lmap);
-	    lmapd->lmap = NULL;
+	if (lmap_io_parse_config_path(a_lmapd->lmap, paths->path)) {
+	    lmap_free(a_lmapd->lmap);
+	    a_lmapd->lmap = NULL;
 	    return -1;
 	}
 	paths = paths->next;
@@ -258,23 +259,23 @@ read_config(struct lmapd *lmapd)
  */
 
 static int
-read_state(struct lmapd *lmapd)
+read_state(struct lmapd *a_lmapd)
 {
     char statefile[PATH_MAX];
     const char *ext;
 
     ext = lmap_io_engine_ext();
     snprintf(statefile, sizeof(statefile), "%s/%s%s",
-	     lmapd->run_path, LMAPD_STATUS_FILE, ext);
+	     a_lmapd->run_path, LMAPD_STATUS_FILE, ext);
 
-    lmapd->lmap = lmap_new();
-    if (! lmapd->lmap) {
+    a_lmapd->lmap = lmap_new();
+    if (! a_lmapd->lmap) {
 	return -1;
     }
 
-    if (lmap_io_parse_state_file(lmapd->lmap, statefile)) {
-	lmap_free(lmapd->lmap);
-	lmapd->lmap = NULL;
+    if (lmap_io_parse_state_file(a_lmapd->lmap, statefile)) {
+	lmap_free(a_lmapd->lmap);
+	a_lmapd->lmap = NULL;
 	return -1;
     }
 
@@ -517,7 +518,7 @@ status_cmd(int argc, char *argv[])
 	   "LST", "LFS", "L-INVOKE", "L-COMPLETE", "L-FAILURE");
 
     if (lmap && lmap->schedules) {
-	char *state;
+	const char *state;
 	struct schedule *schedule;
 	struct action *action;
 	uint32_t total_attempts;
@@ -544,11 +545,11 @@ status_cmd(int argc, char *argv[])
 		+ schedule->cnt_suppressions + schedule->cnt_overlaps;
 	    printf("%-15.15s ", schedule->name ? schedule->name : "???");
 	    printf("%-1s ", state);
-	    printf("%3d %3d %3d %3d ",
-		   total_attempts ? schedule->cnt_invocations*100/total_attempts : 0,
-		   total_attempts ? schedule->cnt_suppressions*100/total_attempts : 0,
-		   total_attempts ? schedule->cnt_overlaps*100/total_attempts : 0,
-		   schedule->cnt_invocations ? schedule->cnt_failures*100/schedule->cnt_invocations : 0);
+	    printf("%3u %3u %3u %3u ",
+		   (unsigned int)(total_attempts ? schedule->cnt_invocations*100/total_attempts : 0),
+		   (unsigned int)(total_attempts ? schedule->cnt_suppressions*100/total_attempts : 0),
+		   (unsigned int)(total_attempts ? schedule->cnt_overlaps*100/total_attempts : 0),
+		   (unsigned int)(schedule->cnt_invocations ? schedule->cnt_failures*100/schedule->cnt_invocations : 0));
 
 	    printf("%5.5s ", render_storage(schedule->storage));
 
@@ -581,11 +582,11 @@ status_cmd(int argc, char *argv[])
 		    + action->cnt_suppressions + action->cnt_overlaps;
 		printf(" %-14.14s ", action->name ? action->name : "???");
 		printf("%-1s ", state);
-		printf("%3d %3d %3d %3d ",
-		       total_attempts ? action->cnt_invocations*100/total_attempts : 0,
-		       total_attempts ? action->cnt_suppressions*100/total_attempts : 0,
-		       total_attempts ? action->cnt_overlaps*100/total_attempts : 0,
-		       action->cnt_invocations ? action->cnt_failures*100/action->cnt_invocations : 0);
+		printf("%3u %3u %3u %3u ",
+		       (unsigned int)(total_attempts ? action->cnt_invocations*100/total_attempts : 0),
+		       (unsigned int)(total_attempts ? action->cnt_suppressions*100/total_attempts : 0),
+		       (unsigned int)(total_attempts ? action->cnt_overlaps*100/total_attempts : 0),
+		       (unsigned int)(action->cnt_invocations ? action->cnt_failures*100/action->cnt_invocations : 0));
 
 		printf("%5.5s ", render_storage(action->storage));
 
@@ -611,7 +612,7 @@ status_cmd(int argc, char *argv[])
 	   "SUPPRESSION", "S");
 
     if (lmap && lmap->supps) {
-	char *state;
+	const char *state;
 	struct supp *supp;
 
 	for (supp = lmap->supps; supp; supp = supp->next) {
@@ -690,12 +691,49 @@ add_default_config_path(void)
     return 0;
 }
 
+static int
+is_valid_fd(const int fd)
+{
+    return fcntl(fd, F_GETFD) != -1 || errno != EBADF;
+}
+
+static void
+fix_fds(const int fd, const int fl)
+{
+    int nfd;
+
+    if (is_valid_fd(fd))
+        return;
+
+    nfd = open("/dev/null", fl);
+    if (nfd == -1 || dup2(nfd, fd) == -1) {
+	lmap_err("failed to redirect invalid FD %d to /dev/null: %s",
+		 fd, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+    if (nfd != fd) {
+        close(nfd);
+    }
+}
+
+static void
+sanitize_std_fds(void)
+{
+    /* do it in file descriptor numerical order! */
+    fix_fds(STDIN_FILENO,  O_RDONLY);
+    fix_fds(STDOUT_FILENO, O_WRONLY);
+    fix_fds(STDERR_FILENO, O_RDWR);
+}
+
 int
 main(int argc, char *argv[])
 {
     int i, opt;
     char *queue_path = NULL;
     char *run_path = NULL;
+
+    /* Ensure POSIX environment is valid for FDs 0-2 */
+    sanitize_std_fds();
 
     lmap_set_log_handler(vlog);
 

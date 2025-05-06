@@ -44,6 +44,8 @@
 /* incoming schedule queue name, must start with _ */
 #define LMAPD_QUEUE_INCOMING_NAME "_incoming"
 
+#define UNUSED(x) (void)(x)
+
 static const char delimiter = ';';
 
 /**
@@ -58,33 +60,45 @@ static const char delimiter = ';';
  * few other characters, either, and will %-escape them instead.
  *
  * @param name file system name
- * @return pointer to a safe filesystem name (static buffer)
+ * @param buf work buffer, NULL for static buffer
+ * @param buflen work buffer length (zero for static buffer)
+ * @return pointer to a safe filesystem name
  */
 
 static char*
-mksafe(const char *name)
+mksafe(char *buf, size_t buflen, const char *name)
 {
-    int i, j;
+    size_t i, j;
     const char safe[] = "-.,_";
     const char hex[] = "0123456789ABCDEF";
     static char save_name[NAME_MAX];
 
-    for (i = 0, j = 0; name[i] && j < NAME_MAX-1; i++) {
+    if (!buf || !buflen) {
+	buf = save_name;
+	buflen = sizeof(save_name);
+    }
+
+    if (!name) {
+	buf[0] = '\0';
+	return buf;
+    }
+
+    for (i = 0, j = 0; name[i] && j < buflen - 1; i++) {
 	if (isalnum(name[i]) || (i > 0 && strchr(safe, name[i]))) {
-	    save_name[j++] = name[i];
+	    buf[j++] = name[i];
 	} else {
 	    /* %-escape the char if there is enough space left */
 	    if (j < NAME_MAX - 4) {
-		save_name[j++] = '%';
-		save_name[j++] = hex[(name[i]>>4) & 0x0f];
-		save_name[j++] = hex[name[i] & 0x0f];;
+		buf[j++] = '%';
+		buf[j++] = hex[(name[i]>>4) & 0x0f];
+		buf[j++] = hex[name[i] & 0x0f];;
 	    } else {
 		break;
 	    }
 	}
     }
-    save_name[j] = 0;
-    return save_name;
+    buf[j] = '\0';
+    return buf;
 }
 
 /**
@@ -133,17 +147,20 @@ remove_all(char *path)
     return nftw(path, remove_cb, 12, FTW_DEPTH | FTW_PHYS);
 }
 
-static unsigned long du_cnt = 0;
-static unsigned long du_size = 0;
-static unsigned long du_blocks = 0;
+/* static unsigned long du_cnt = 0;	unused */
+/* static unsigned long du_size = 0;	unused */
+static uint64_t du_blocks = 0;
 
 static int
 du_cb(const char *fpath, const struct stat *sb, int tflag, struct FTW *ftwbuf)
 {
+    UNUSED(fpath);
+    UNUSED(ftwbuf);
+
     if (tflag == FTW_F) {
-	du_size += sb->st_size;
-	du_blocks += sb->st_blocks;
-	du_cnt++;
+	/* du_size += sb->st_size; */
+	du_blocks += (uint64_t)sb->st_blocks;
+	/* du_cnt++; */
     }
     return 0;           /* To tell nftw() to continue */
 }
@@ -151,8 +168,8 @@ du_cb(const char *fpath, const struct stat *sb, int tflag, struct FTW *ftwbuf)
 static int
 du(char *path, uint64_t *storage)
 {
-    du_cnt = 0;
-    du_size = 0;
+    /* du_cnt = 0;  */
+    /* du_size = 0; */
     du_blocks = 0;
     if (nftw(path, du_cb, 6, 0) == -1) {
 	return -1;
@@ -502,7 +519,6 @@ lmapd_workspace_action_move(struct lmapd *lmapd, struct schedule *schedule,
     int ret = 0;
     char oldfilepath[PATH_MAX];
     char newfilepath[PATH_MAX];
-    const char *newfileformat;
     struct dirent *dp;
     DIR *dfd;
     struct stat st;
@@ -523,13 +539,6 @@ lmapd_workspace_action_move(struct lmapd *lmapd, struct schedule *schedule,
     if (defer && destination != schedule)
 	return 1;
 
-    if (destination != schedule) {
-	newfileformat = "%s/" LMAPD_QUEUE_INCOMING_NAME "/%s";
-    } else {
-	/* Special case an action moving to its own schedule */
-	newfileformat = "%s/%s";
-    }
-
     dfd = opendir(action->workspace);
     if (!dfd) {
 	lmap_err("failed to open '%s'", action->workspace);
@@ -549,8 +558,16 @@ lmapd_workspace_action_move(struct lmapd *lmapd, struct schedule *schedule,
 	 * to the above */
 	snprintf(oldfilepath, sizeof(oldfilepath), "%s/%s",
 		 action->workspace, dp->d_name);
-	snprintf(newfilepath, sizeof(newfilepath), newfileformat,
-		     destination->workspace, dp->d_name);
+
+	if (destination != schedule) {
+	    snprintf(newfilepath, sizeof(newfilepath),
+			 "%s/" LMAPD_QUEUE_INCOMING_NAME "/%s",
+			 destination->workspace, dp->d_name);
+	} else {
+	    /* Special case: action moving its result to its own schedule */
+	    snprintf(newfilepath, sizeof(newfilepath), "%s/%s",
+			 destination->workspace, dp->d_name);
+	}
 	if (link(oldfilepath, newfilepath) < 0) {
 	    lmap_err("failed to move '%s' to '%s'", oldfilepath, newfilepath);
 	    ret = -1;
@@ -591,7 +608,7 @@ lmapd_workspace_init(struct lmapd *lmapd)
 	    continue;
 	}
 	snprintf(filepath, sizeof(filepath), "%s/%s",
-		 lmapd->queue_path, mksafe(sched->name));
+		 lmapd->queue_path, mksafe(NULL, 0, sched->name));
 	if (mkdir(filepath, 0700) < 0 && errno != EEXIST) {
 	    lmap_err("failed to mkdir '%s'", filepath);
 	    ret = -1;
@@ -603,7 +620,7 @@ lmapd_workspace_init(struct lmapd *lmapd)
 		continue;
 	    }
 	    snprintf(filepath, sizeof(filepath), "%s/%s",
-		     sched->workspace, mksafe(act->name));
+		     sched->workspace, mksafe(NULL, 0, act->name));
 	    if (mkdir(filepath, 0700) < 0 && errno != EEXIST) {
 		lmap_err("failed to mkdir '%s'", filepath);
 		ret = -1;
@@ -673,9 +690,9 @@ lmapd_workspace_action_meta_add_start(struct schedule *schedule, struct action *
     for (tag = action->tags; tag; tag = tag->next) {
 	csv_append_key_value(f, delimiter, "tag", tag->tag);
     }
-    snprintf(buf, sizeof(buf), "%lu", schedule->last_invocation);
+    snprintf(buf, sizeof(buf), "%llu", (unsigned long long)schedule->last_invocation);
     csv_append_key_value(f, delimiter, "event", buf);
-    snprintf(buf, sizeof(buf), "%lu", action->last_invocation);
+    snprintf(buf, sizeof(buf), "%llu", (unsigned long long)action->last_invocation);
     csv_append_key_value(f, delimiter, "start", buf);
     if (schedule->cycle_number) {
 	struct tm *tmp;
@@ -709,7 +726,7 @@ lmapd_workspace_action_meta_add_end(struct schedule *schedule, struct action *ac
 	return -1;
     }
 
-    snprintf(buf, sizeof(buf), "%lu", action->last_completion);
+    snprintf(buf, sizeof(buf), "%llu", (unsigned long long)action->last_completion);
     csv_append_key_value(f, delimiter, "end", buf);
     snprintf(buf, sizeof(buf), "%d", action->last_status);
     csv_append_key_value(f, delimiter, "status", buf);
@@ -723,15 +740,14 @@ lmapd_workspace_action_open_data(struct schedule *schedule,
 				 struct action *action, int flags)
 {
     int fd;
-    int len;
     char filepath[PATH_MAX];
+    char b1[NAME_MAX];
 
-    snprintf(filepath, sizeof(filepath), "%s/%lu-%s",
-	     action->workspace, action->last_invocation,
-	     mksafe(schedule->name));
-    len = strlen(filepath);
-    snprintf(filepath+len, sizeof(filepath)-len, "-%s.data",
-	     mksafe(action->name));
+    snprintf(filepath, sizeof(filepath), "%s/%llu-%s-%s.data",
+	     action->workspace,
+	     (unsigned long long)action->last_invocation,
+	     mksafe(NULL, 0, schedule->name),
+	     mksafe(b1, sizeof(b1), action->name));
     fd = open(filepath, flags, 0600);
     if (fd == -1) {
 	lmap_err("failed to open '%s'", filepath);
@@ -744,15 +760,14 @@ lmapd_workspace_action_open_meta(struct schedule *schedule,
 				 struct action *action, int flags)
 {
     int fd;
-    int len;
     char filepath[PATH_MAX];
+    char b1[NAME_MAX];
 
-    snprintf(filepath, sizeof(filepath), "%s/%lu-%s",
-	     action->workspace, action->last_invocation,
-	     mksafe(schedule->name));
-    len = strlen(filepath);
-    snprintf(filepath+len, sizeof(filepath)-len, "-%s.meta",
-	     mksafe(action->name));
+    snprintf(filepath, sizeof(filepath), "%s/%llu-%s-%s.meta",
+	     action->workspace,
+	     (unsigned long long)action->last_invocation,
+	     mksafe(NULL, 0, schedule->name),
+	     mksafe(b1, sizeof(b1), action->name));
     fd = open(filepath, flags, 0600);
     if (fd == -1) {
 	lmap_err("failed to open '%s'", filepath);
@@ -784,6 +799,10 @@ read_table(int fd)
     while (!feof(file)) {
 	char *s = csv_next(file, delimiter);
 	if (! s) {
+	    if (errno) {
+		lmap_err("failed to parse csv file: %s", strerror(errno));
+		goto error_exit;
+	    }
 	    if (feof(file)) {
 		break;
 	    }
@@ -793,28 +812,29 @@ read_table(int fd)
 	if (!inrow) {
 	    row = lmap_row_new();
 	    if (! row) {
-		lmap_table_free(tab);
-		if (s) free(s);
-		(void) fclose(file);
-		return NULL;
+		free(s);
+		goto error_exit;
 	    }
 	    lmap_table_add_row(tab, row);
 	    inrow++;
 	}
 	val = lmap_value_new();
 	if (! val) {
-	    lmap_table_free(tab);
-	    if (s) free(s);
-	    (void) fclose(file);
-	    return NULL;
+	    free(s);
+	    goto error_exit;
 	}
 	lmap_value_set_value(val, s);
 	lmap_row_add_value(row, val);
-	if (s) free(s);
+	free(s);
     }
 
     (void) fclose(file);
     return tab;
+
+error_exit:
+    lmap_table_free(tab);
+    (void) fclose(file);
+    return NULL;
 }
 
 static struct result *
@@ -841,6 +861,14 @@ read_result(int fd)
 	key = NULL;
 	value = NULL;
 	csv_next_key_value(file, delimiter, &key, &value);
+	if (errno) {
+		lmap_err("failed to read csv file stream: %s", strerror(errno));
+		lmap_result_free(res);
+		(void) fclose(file);
+		free(key);
+		free(value);
+		return NULL;
+	}
 	if (key && value) {
 	    if (! strcmp(key, "schedule")) {
 		lmap_result_set_schedule(res, value);
@@ -883,8 +911,8 @@ read_result(int fd)
 		lmap_result_set_status(res, value);
 	    }
 	}
-	if (key) free(key);
-	if (value) free(value);
+	free(key);
+	free(value);
     }
     if (opt) {
 	lmap_result_add_option(res, opt);

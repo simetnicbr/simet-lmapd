@@ -61,7 +61,7 @@ struct lmapd {
 #define LMAPD_FLAG_SKIPSTARTUP	0x02
 #define LMAPD_FLAG_STARTUPDONE	0x04
 
-extern struct lmapd * lmapd_new();
+extern struct lmapd * lmapd_new(void);
 extern void lmapd_free(struct lmapd *lmapd);
 extern void lmapd_flush_config_paths(struct lmapd *lmapd);
 extern int lmapd_add_config_path(struct lmapd *lmapd, const char *value);

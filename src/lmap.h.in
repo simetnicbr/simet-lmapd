@@ -43,7 +43,7 @@ struct lmap {
     struct result     *results;
 };
 
-extern struct lmap * lmap_new();
+extern struct lmap * lmap_new(void);
 extern void lmap_free(struct lmap *lmap);
 extern int lmap_valid(struct lmap *lmap);
 extern int lmap_add_schedule(struct lmap *lmap, struct schedule *schedule);
@@ -76,12 +76,12 @@ struct agent {
     time_t last_started;
 };
 
-#define LMAP_AGENT_FLAG_REPORT_AGENT_ID_SET		0x01
-#define LMAP_AGENT_FLAG_REPORT_GROUP_ID_SET		0x02
-#define LMAP_AGENT_FLAG_REPORT_MEASUREMENT_POINT_SET	0x04
-#define LMAP_AGENT_FLAG_CONTROLLER_TIMEOUT_SET		0x08
+#define LMAP_AGENT_FLAG_REPORT_AGENT_ID_SET		0x01U
+#define LMAP_AGENT_FLAG_REPORT_GROUP_ID_SET		0x02U
+#define LMAP_AGENT_FLAG_REPORT_MEASUREMENT_POINT_SET	0x04U
+#define LMAP_AGENT_FLAG_CONTROLLER_TIMEOUT_SET		0x08U
 
-extern struct agent * lmap_agent_new();
+extern struct agent * lmap_agent_new(void);
 extern void lmap_agent_free(struct agent *agent);
 extern int lmap_agent_valid(struct lmap *lmap, struct agent *agent);
 extern int lmap_agent_set_agent_id(struct agent *agent, const char *value);
@@ -105,7 +105,7 @@ struct capability {
     struct tag *tags;
 };
 
-extern struct capability * lmap_capability_new();
+extern struct capability * lmap_capability_new(void);
 extern void lmap_capability_free(struct capability *capabilities);
 extern int lmap_capability_valid(struct lmap *lmap, struct capability *capabilities);
 extern int lmap_capability_add_task(struct capability *capabilities, struct task *task);
@@ -134,9 +134,9 @@ struct supp {
 #define LMAP_SUPP_STATE_DISABLED		0x02
 #define LMAP_SUPP_STATE_ACTIVE			0x03
 
-#define LMAP_SUPP_FLAG_STOP_RUNNING_SET		0x01
+#define LMAP_SUPP_FLAG_STOP_RUNNING_SET		0x01U
 
-extern struct supp * lmap_supp_new();
+extern struct supp * lmap_supp_new(void);
 extern void lmap_supp_free(struct supp *supp);
 extern int lmap_supp_valid(struct lmap *lmap, struct supp *supp);
 extern int lmap_supp_set_name(struct supp *supp, const char *value);
@@ -159,7 +159,7 @@ struct option {
     struct option *next;
 };
 
-extern struct option * lmap_option_new();
+extern struct option * lmap_option_new(void);
 extern void lmap_option_free(struct option *option);
 extern int lmap_option_valid(struct lmap *lmap, struct option *option);
 extern int lmap_option_set_id(struct option *option, const char *value);
@@ -178,7 +178,7 @@ struct registry {
     struct registry *next;
 };
 
-extern struct registry * lmap_registry_new();
+extern struct registry * lmap_registry_new(void);
 extern void lmap_registry_free(struct registry *registry);
 extern int lmap_registry_valid(struct lmap *lmap, struct registry *registry);
 extern int lmap_registry_set_uri(struct registry *registry, const char *value);
@@ -194,7 +194,7 @@ struct tag {
     struct tag *next;
 };
 
-extern struct tag * lmap_tag_new();
+extern struct tag * lmap_tag_new(void);
 extern void lmap_tag_free(struct tag *tag);
 extern int lmap_tag_valid(struct lmap *lmap, struct tag *tag);
 extern int lmap_tag_set_tag(struct tag *tag, const char *value);
@@ -215,7 +215,7 @@ struct action {
     struct action *next;
 
     int8_t state;
-    int32_t flags;
+    uint32_t flags;
     uint64_t storage;
     time_t last_invocation;
     time_t last_completion;
@@ -240,9 +240,9 @@ struct action {
 #define LMAP_ACTION_STATE_RUNNING		0x03
 #define LMAP_ACTION_STATE_SUPPRESSED		0x04
 
-#define LMAP_ACTION_FLAG_MOVEDEFERRED		0x01
+#define LMAP_ACTION_FLAG_MOVEDEFERRED		0x01U
 
-extern struct action * lmap_action_new();
+extern struct action * lmap_action_new(void);
 extern void lmap_action_free(struct action *action);
 extern int lmap_action_valid(struct lmap *lmap, struct action *action);
 extern int lmap_action_set_name(struct action *action, const char *value);
@@ -301,17 +301,17 @@ struct schedule {
 #define LMAP_SCHEDULE_EXEC_MODE_PARALLEL	0x02
 #define LMAP_SCHEDULE_EXEC_MODE_PIPELINED	0x03
 
-#define LMAP_SCHEDULE_FLAG_END_SET		0x01
-#define LMAP_SCHEDULE_FLAG_DURATION_SET		0x02
-#define LMAP_SCHEDULE_FLAG_EXEC_MODE_SET	0x04
-#define LMAP_SCHEDULE_FLAG_STOP_RUNNING		0x08
+#define LMAP_SCHEDULE_FLAG_END_SET		0x01U
+#define LMAP_SCHEDULE_FLAG_DURATION_SET		0x02U
+#define LMAP_SCHEDULE_FLAG_EXEC_MODE_SET	0x04U
+#define LMAP_SCHEDULE_FLAG_STOP_RUNNING		0x08U
 
 #define LMAP_SCHEDULE_STATE_ENABLED		0x01
 #define LMAP_SCHEDULE_STATE_DISABLED		0x02
 #define LMAP_SCHEDULE_STATE_RUNNING		0x03
 #define LMAP_SCHEDULE_STATE_SUPPRESSED		0x04
 
-extern struct schedule * lmap_schedule_new();
+extern struct schedule * lmap_schedule_new(void);
 extern void lmap_schedule_free(struct schedule *schedule);
 extern int lmap_schedule_valid(struct lmap *lmap, struct schedule *schedule);
 extern int lmap_schedule_set_name(struct schedule *schedule, const char *value);
@@ -353,7 +353,7 @@ struct task {
     struct task *next;
 };
 
-extern struct task * lmap_task_new();
+extern struct task * lmap_task_new(void);
 extern void lmap_task_free(struct task *task);
 extern int lmap_task_valid(struct lmap *lmap, struct task *task);
 extern int lmap_task_set_name(struct task *task, const char *value);
@@ -371,7 +371,7 @@ extern int lmap_task_add_tag(struct task *task, const char *value);
 struct event {
     char *name;
     int type;
-    int flags;
+    uint32_t flags;
     struct event *next;
 
     time_t last_invocation;
@@ -403,14 +403,14 @@ struct event {
 #define LMAP_EVENT_TYPE_CONTROLLER_LOST		0x06
 #define LMAP_EVENT_TYPE_CONTROLLER_CONNECTED	0x07
 
-#define LMAP_EVENT_FLAG_INTERVAL_SET		0x01
-#define LMAP_EVENT_FLAG_START_SET		0x02
-#define LMAP_EVENT_FLAG_END_SET			0x04
-#define LMAP_EVENT_FLAG_RANDOM_SPREAD_SET	0x08
-#define LMAP_EVENT_FLAG_CYCLE_INTERVAL_SET	0x10
-#define LMAP_EVENT_FLAG_TIMEZONE_OFFSET_SET	0x20
+#define LMAP_EVENT_FLAG_INTERVAL_SET		0x01U
+#define LMAP_EVENT_FLAG_START_SET		0x02U
+#define LMAP_EVENT_FLAG_END_SET			0x04U
+#define LMAP_EVENT_FLAG_RANDOM_SPREAD_SET	0x08U
+#define LMAP_EVENT_FLAG_CYCLE_INTERVAL_SET	0x10U
+#define LMAP_EVENT_FLAG_TIMEZONE_OFFSET_SET	0x20U
 
-extern struct event * lmap_event_new();
+extern struct event * lmap_event_new(void);
 extern void lmap_event_free(struct event *event);
 extern int lmap_event_valid(struct lmap *lmap, struct event *event);
 extern int lmap_event_set_name(struct event *event, const char *value);
@@ -449,7 +449,7 @@ struct result {
 
 #define LMAP_RESULT_FLAG_STATUS_SET	0x01
 
-extern struct result * lmap_result_new();
+extern struct result * lmap_result_new(void);
 extern void lmap_result_free(struct result *res);
 extern int lmap_result_valid(struct lmap *lmap, struct result *res);
 extern int lmap_result_add_table(struct result *res, struct table *tab);
@@ -474,7 +474,7 @@ struct table {
     struct table *next;
 };
 
-extern struct table * lmap_table_new();
+extern struct table * lmap_table_new(void);
 extern void lmap_table_free(struct table *tab);
 extern int lmap_table_valid(struct lmap *lmap, struct table *tab);
 extern int lmap_table_add_registry(struct table *tab, struct registry *registry);
@@ -486,7 +486,7 @@ struct row {
     struct row *next;
 };
 
-extern struct row * lmap_row_new();
+extern struct row * lmap_row_new(void);
 extern void lmap_row_free(struct row *row);
 extern int lmap_row_valid(struct lmap *lmap, struct row *row);
 extern int lmap_row_add_value(struct row *row, struct value *val);
@@ -496,7 +496,7 @@ struct value {
     struct value *next;
 };
 
-extern struct value * lmap_value_new();
+extern struct value * lmap_value_new(void);
 extern void lmap_value_free(struct value *val);
 extern int lmap_value_valid(struct lmap *lmap, struct value *val);
 extern int lmap_value_set_value(struct value *val, const char *value);

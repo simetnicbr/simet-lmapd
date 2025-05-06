@@ -21,6 +21,7 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <assert.h>
 
 #include "lmap.h"
 #include "lmapd.h"
@@ -44,6 +45,8 @@ lmapd_pid_read(struct lmapd *lmapd)
     FILE *f;
     pid_t pid;
     char pidfile[PATH_MAX];
+
+    assert(lmapd && lmapd->run_path);
 
     snprintf(pidfile, sizeof(pidfile),
 	     "%s/%s", lmapd->run_path, LMAPD_PID_FILE);
@@ -104,6 +107,8 @@ lmapd_pid_write(struct lmapd *lmapd)
     pid_t pid;
     char pidfile[PATH_MAX];
 
+    assert(lmapd && lmapd->run_path);
+
     snprintf(pidfile, sizeof(pidfile),
 	     "%s/%s", lmapd->run_path, LMAPD_PID_FILE);
 
@@ -138,6 +143,8 @@ int
 lmapd_pid_remove(struct lmapd *lmapd)
 {
     char pidfile[PATH_MAX];
+
+    assert(lmapd && lmapd->run_path);
 
     snprintf(pidfile, sizeof(pidfile),
 	     "%s/%s", lmapd->run_path, LMAPD_PID_FILE);

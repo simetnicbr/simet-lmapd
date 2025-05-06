@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <sys/utsname.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #include "lmap.h"
 #include "lmapd.h"
@@ -38,11 +39,11 @@ static struct lmapd *lmapd = NULL;
 static void
 atexit_cb(void)
 {
-    if (lmapd_pid_check(lmapd)) {
-	lmapd_pid_remove(lmapd);
-    }
-
     if (lmapd) {
+	if (lmapd_pid_check(lmapd)) {
+	    lmapd_pid_remove(lmapd);
+	}
+
 	lmapd_free(lmapd);
     }
 }
@@ -71,6 +72,50 @@ usage(FILE *f)
 	    LMAPD_LMAPD);
 }
 
+static int
+devnull(const int newfd, const mode_t mode)
+{
+    int oldfd = open("/dev/null", mode, 0);
+    if (oldfd == -1) {
+	return -1;
+    }
+    if (dup2(oldfd, newfd) == -1) {
+	int serr = errno;
+	(void) close(oldfd);
+	errno = serr;
+	return -1;
+    }
+    if (oldfd != newfd) {
+	(void) close(oldfd);
+    }
+    return 0;
+}
+
+static int
+is_valid_fd(const int fd)
+{
+    return fcntl(fd, F_GETFD) != -1 || errno != EBADF;
+}
+
+static void
+fix_fds(const int fd, const int fl)
+{
+    if (!is_valid_fd(fd) && devnull(fd, fl)) {
+	lmap_err("failed to redirect invalid FD %d to /dev/null: %s",
+		 fd, strerror(errno));
+	exit(EXIT_FAILURE);
+    }
+}
+
+static void
+sanitize_std_fds(void)
+{
+    /* do it in file descriptor numerical order! */
+    fix_fds(STDIN_FILENO,  O_RDONLY);
+    fix_fds(STDOUT_FILENO, O_WRONLY);
+    fix_fds(STDERR_FILENO, O_RDWR);
+}
+
 /**
  * @brief Daemonizes the process
  *
@@ -82,7 +127,6 @@ usage(FILE *f)
 static void
 daemonize(void)
 {
-    int fd;
     pid_t pid;
 
     pid = fork();
@@ -116,15 +160,32 @@ daemonize(void)
     }
 
     closelog();
-    fd = open("/dev/null", O_RDWR, 0);
-    if (fd != -1) {
-	dup2(fd, STDIN_FILENO);
-	dup2(fd, STDOUT_FILENO);
-	dup2(fd, STDERR_FILENO);
+
+    /* note: do not assume FDs 0,1,2 are already open. */
+    if (devnull(STDIN_FILENO, O_RDONLY) ||
+	    devnull(STDOUT_FILENO, O_WRONLY) ||
+	    dup2(STDOUT_FILENO, STDERR_FILENO) == -1) {
+	lmap_err("failed to redirect stdin/stdout/stderr to /dev/null");
+	exit(EXIT_FAILURE);
     }
-    for (fd = sysconf(_SC_OPEN_MAX); fd > 2; fd--) {
-	(void) close(fd);
+
+#if defined(HAVE_CLOSEFROM)
+    /* glibc: uses close_range() in Linux, with a smart fallback to
+     *        iterating /proc/<pid>/fd.
+     * MUSL:  no support (yet?)
+     * BSD:   has closefrom() if new enough */
+    closefrom(3);
+#else
+    /* in the absense of an small ulimit this could take forever, so
+     * limit it to MIN(4096, _SC_OPEN_MAX) */
+    {
+	const long maxfd = sysconf(_SC_OPEN_MAX);
+	int cfd;
+	for (cfd = (maxfd < 4096)? (int)maxfd : 4096; cfd > 2; cfd--) {
+	    (void) close(cfd);
+	}
     }
+#endif
     openlog("lmapd", LOG_PID | LOG_NDELAY, LOG_DAEMON);
 }
 
@@ -139,47 +200,47 @@ daemonize(void)
  */
 
 static int
-read_config(struct lmapd *lmapd)
+read_config(struct lmapd *a_lmapd)
 {
     int ret = 0;
     struct paths *paths;
 
-    lmapd->lmap = lmap_new();
-    if (! lmapd->lmap) {
+    a_lmapd->lmap = lmap_new();
+    if (! a_lmapd->lmap) {
 	return -1;
     }
 
-    paths = lmapd->config_paths;
+    paths = a_lmapd->config_paths;
     while(paths && paths->path) {
-	ret = lmap_io_parse_config_path(lmapd->lmap, paths->path);
+	ret = lmap_io_parse_config_path(a_lmapd->lmap, paths->path);
 	if (ret != 0) {
-	    lmap_free(lmapd->lmap);
-	    lmapd->lmap = NULL;
+	    lmap_free(a_lmapd->lmap);
+	    a_lmapd->lmap = NULL;
 	    return -1;
 	}
 	paths = paths->next;
     }
 
-    if (lmapd->lmap->agent) {
-	lmapd->lmap->agent->last_started = time(NULL);
+    if (a_lmapd->lmap->agent) {
+	a_lmapd->lmap->agent->last_started = time(NULL);
     }
 
-    ret = lmap_io_parse_state_path(lmapd->lmap, lmapd->capability_path);
+    ret = lmap_io_parse_state_path(a_lmapd->lmap, a_lmapd->capability_path);
     if (ret != 0) {
-	lmap_free(lmapd->lmap);
-	lmapd->lmap = NULL;
+	lmap_free(a_lmapd->lmap);
+	a_lmapd->lmap = NULL;
 	return -1;
     }
 
-    if (!lmapd->lmap->capabilities) {
-	lmapd->lmap->capabilities = lmap_capability_new();
+    if (!a_lmapd->lmap->capabilities) {
+	a_lmapd->lmap->capabilities = lmap_capability_new();
     }
-    if (lmapd->lmap->capabilities) {
+    if (a_lmapd->lmap->capabilities) {
 	char buf[256];
 	snprintf(buf, sizeof(buf), "%s version %d.%d.%d", LMAPD_LMAPD,
 		 LMAP_VERSION_MAJOR, LMAP_VERSION_MINOR, LMAP_VERSION_PATCH);
-	lmap_capability_set_version(lmapd->lmap->capabilities, buf);
-	lmap_capability_add_system_tags(lmapd->lmap->capabilities);
+	lmap_capability_set_version(a_lmapd->lmap->capabilities, buf);
+	lmap_capability_add_system_tags(a_lmapd->lmap->capabilities);
     }
 
     return 0;
@@ -212,6 +273,9 @@ main(int argc, char *argv[])
     char *queue_path = NULL;
     char *run_path = NULL;
     pid_t pid;
+
+    /* Ensure POSIX environment is valid for FDs 0-2 */
+    sanitize_std_fds();
 
     lmapd = lmapd_new();
     if (! lmapd) {
@@ -339,7 +403,7 @@ main(int argc, char *argv[])
      * outage? I will fix it later when the power is back. ;-)
      */
 
-    srand(time(NULL));
+    srand((unsigned int)time(NULL));
 
     pid = lmapd_pid_read(lmapd);
     if (pid) {

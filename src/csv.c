@@ -17,27 +17,33 @@
 
 #include <ctype.h>
 #include <stdlib.h>
+#include <errno.h>
 
 #include "utils.h"
 #include "csv.h"
 
+/**
+ * xrealloc() - reliable realloc()
+ *
+ * Unlike standard realloc, buf = xrealloc(buf, size) will not leak
+ * memory on failure.  On failure, xrealloc() returns buf with errno
+ * set to EINVAL.  On success, xrealloc() has the same semantics
+ * as realloc(), and sets errno to 0.
+ */
 static void *
 xrealloc(void *ptr, size_t size, const char *func)
 {
     char *p = realloc(ptr, size);
     if (!p) {
         lmap_log(LOG_ERR, func, "failed to allocate memory");
+	errno = ENOMEM;
+	return ptr;
     }
+    errno = 0;
     return p;
 }
 
-static void
-xfree(void *ptr)
-{
-    if (ptr) {
-        free(ptr);
-    }
-}
+#define xfree(p) free(p)
 
 static void
 append(FILE *file, const char delimiter, const char *field)
@@ -121,18 +127,23 @@ csv_append_key_value(FILE *file, const char delimiter,
 char*
 csv_next(FILE *file, const char delimiter)
 {
-    int c, i, quoted = 0;
-    size_t size = 0;
+    int ic, quoted = 0;
+    size_t i, size = 0;
     char *buf = NULL;
     const char quote = '"';
+    char c;
 
     i = 0;
-    while ((c = fgetc(file)) != EOF) {
+    while ((ic = fgetc(file)) != EOF) {
+	c = (char)ic;
+
 	if (!quoted && c == delimiter) {
 	    break;
 	}
 	if (c == '\n') {
 	    if (i == 0) {
+		xfree(buf);
+		errno = 0;
 		return NULL;
 	    } else {
 		ungetc(c, file);
@@ -149,12 +160,18 @@ csv_next(FILE *file, const char delimiter)
 	if (i >= size) {
 	    size += 64;
 	    buf = xrealloc(buf, size, __FUNCTION__);
+	    if (!buf || errno) {
+		xfree(buf);
+		errno = ENOMEM;
+		return NULL;
+	    }
 	}
 	if (c == quote) {
 	    if (quoted) {
-		if ((c = fgetc(file)) == EOF) {
+		if ((ic = fgetc(file)) == EOF) {
 		    break;
 		}
+		c = (char)ic;
 		if (c == delimiter) {
 		    break;
 		}
@@ -175,9 +192,15 @@ csv_next(FILE *file, const char delimiter)
 	if (i >= size) {
 	    size += 2;
 	    buf = xrealloc(buf, size, __FUNCTION__);
+	    if (!buf || errno) {
+		xfree(buf);
+		errno = ENOMEM;
+		return NULL;
+	    }
 	}
 	buf[i] = 0;
     }
+    errno = 0;
     return buf;
 }
 
@@ -185,6 +208,7 @@ void
 csv_next_key_value(FILE *file, const char delimiter, char **key, char **value)
 {
     char *s;
+    char *v;
 
     if (key) {
 	*key = NULL;
@@ -193,24 +217,36 @@ csv_next_key_value(FILE *file, const char delimiter, char **key, char **value)
 	*value = NULL;
     }
     if (feof(file)) {
+	errno = 0;
 	return;
     }
 
     while ((s = csv_next(file, delimiter)) == NULL) {
+	if (errno) {
+	    return;
+	}
 	if (feof(file)) {
+	    errno = 0;
 	    return;
 	}
     }
+
+    v = csv_next(file, delimiter);
+    if (!v && errno) {
+	xfree(s);
+	return;
+    }
+
     if (key) {
 	*key = s;
     } else {
 	xfree(s);
     }
-    s = csv_next(file, delimiter);
     if (value) {
-	*value = s;
+	*value = v;
     } else {
-	xfree(s);
+	xfree(v);
     }
+    errno = 0;
 }
 

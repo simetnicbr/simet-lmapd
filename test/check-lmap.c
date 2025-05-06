@@ -40,13 +40,13 @@ static void vlog(int level, const char *func, const char *format, va_list args)
 #endif
 }
 
-void setup(void)
+static void setup(void)
 {
     /* start from a clean (global) state */
     last_error_msg[0] = '\0';
 }
 
-void teardown(void)
+static void teardown(void)
 {
 
 }
@@ -85,6 +85,38 @@ START_TEST(test_lmap_agent)
     ck_assert_int_eq(lmap_agent_set_group_id(agent, "foo"), 0);
     ck_assert_int_eq(lmap_agent_set_group_id(agent, "bar"), 0);
     ck_assert_str_eq(agent->group_id, "bar");
+    lmap_agent_free(agent);
+}
+END_TEST
+
+START_TEST(test_lmap_localtime_handling)
+{
+    struct agent *agent = lmap_agent_new();
+
+    setenv("TZ", "UTC+00:00", 1);
+    tzset();
+    ck_assert_int_eq(timezone, 0);
+    ck_assert_int_eq(lmap_agent_set_last_started(agent, "2016-02-10T14:48:19-01:00"), 0);
+    ck_assert_int_eq(agent->last_started, 1455119299);
+    ck_assert_int_eq(lmap_agent_set_last_started(agent, "2016-02-10T16:48:23+01:00"), 0);
+    ck_assert_int_eq(agent->last_started, 1455119303);
+
+    setenv("TZ", "XYZ-11:15", 1);
+    tzset();
+    ck_assert_int_eq(timezone, -40500);
+    ck_assert_int_eq(lmap_agent_set_last_started(agent, "2016-02-10T14:48:19-01:00"), 0);
+    ck_assert_int_eq(agent->last_started, 1455119299);
+    ck_assert_int_eq(lmap_agent_set_last_started(agent, "2016-02-10T16:48:23+01:00"), 0);
+    ck_assert_int_eq(agent->last_started, 1455119303);
+
+    setenv("TZ", "XYZ+03:45", 1);
+    tzset();
+    ck_assert_int_eq(timezone, 13500);
+    ck_assert_int_eq(lmap_agent_set_last_started(agent, "2016-02-10T14:48:19-01:00"), 0);
+    ck_assert_int_eq(agent->last_started, 1455119299);
+    ck_assert_int_eq(lmap_agent_set_last_started(agent, "2016-02-10T16:48:23+01:00"), 0);
+    ck_assert_int_eq(agent->last_started, 1455119303);
+
     lmap_agent_free(agent);
 }
 END_TEST
@@ -260,7 +292,7 @@ START_TEST(test_lmap_event_calendar)
     ck_assert_int_eq(lmap_event_add_second(event, "60"), -1);
     ck_assert_str_eq(last_error_msg, "illegal second value '60'");
     ck_assert_int_eq(lmap_event_add_second(event, "*"), 0);
-    ck_assert_int_eq(event->seconds - UINT64_MAX, 0);
+    ck_assert_uint_eq(event->seconds - UINT64_MAX, 0);
 
     ck_assert_int_eq(lmap_event_valid(NULL, event), 0);
     ck_assert_str_eq(last_error_msg, "event 'calendar' requires a minute");
@@ -270,7 +302,7 @@ START_TEST(test_lmap_event_calendar)
     ck_assert_str_eq(last_error_msg, "illegal minute value 'foo'");
     ck_assert_int_eq(lmap_event_add_minute(event, "60"), -1);
     ck_assert_str_eq(last_error_msg, "illegal minute value '60'");
-    ck_assert_int_eq(event->minutes, 3);
+    ck_assert_uint_eq(event->minutes, 3);
 
     ck_assert_int_eq(lmap_event_valid(NULL, event), 0);
     ck_assert_str_eq(last_error_msg, "event 'calendar' requires an hour");
@@ -517,7 +549,7 @@ END_TEST
 START_TEST(test_lmap_row)
 {
     int i;
-    char *vals[] = { "foo", "bar", " b a z ", NULL };
+    const char *vals[] = { "foo", "bar", " b a z ", NULL };
     struct value *val;
 
     struct row *row = lmap_row_new();
@@ -770,7 +802,7 @@ START_TEST(test_parser_config_suppressions)
         "    </lmapc:suppressions>\n"
         "  </lmapc:lmap>\n"
         "</config>\n";
-    char *ja =
+    const char *ja =
 	"{\n"
 	"  \"ietf-lmap-control:lmap\":{\n"
 	"    \"suppressions\":{\n"
@@ -2544,18 +2576,26 @@ START_TEST(test_csv_key_value)
     csv_next_key_value(f, delimiter, &key, &value);
     ck_assert_str_eq(key, hello);
     ck_assert_str_eq(value, world);
+    free(key);
+    free(value);
     csv_next_key_value(f, delimiter, &key, &value);
     ck_assert_str_eq(key, world);
     ck_assert_str_eq(value, hello);
+    free(key);
+    free(value);
     csv_next_key_value(f, delimiter, &key, &value);
     ck_assert_ptr_eq(key, NULL);
     ck_assert_ptr_eq(value, NULL);
+    free(key);
+    free(value);
     rewind(f);
     csv_next_key_value(f, delimiter, NULL, &value);
     ck_assert_str_eq(value, world);
+    free(value);
     rewind(f);
     csv_next_key_value(f, delimiter, &key, NULL);
     ck_assert_str_eq(key, hello);
+    free(key);
     fclose(f);
 }
 END_TEST
@@ -2590,7 +2630,7 @@ START_TEST(test_load_config_json)
 }
 END_TEST
 
-Suite * lmap_suite(void)
+static Suite * lmap_suite(void)
 {
     Suite *s;
     TCase *tc_core, *tc_parser, *tc_csv, *tc_file;
@@ -2602,6 +2642,7 @@ Suite * lmap_suite(void)
 
     tcase_add_checked_fixture(tc_core, setup, teardown);
     tcase_add_test(tc_core, test_lmap_agent);
+    tcase_add_test(tc_core, test_lmap_localtime_handling);
     tcase_add_test(tc_core, test_lmap_registry);
     tcase_add_test(tc_core, test_lmap_option);
     tcase_add_test(tc_core, test_lmap_tag);
@@ -2662,7 +2703,7 @@ int main(void)
     Suite *s;
     SRunner *sr;
 
-    setenv("TZ", "GMT", 1);
+    setenv("TZ", "UTC+00:00", 1);
 
     lmap_set_log_handler(vlog);
 
