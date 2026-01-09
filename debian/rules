@@ -18,7 +18,7 @@ export DEB_CFLAGS_MAINT_APPEND := -Wall -pipe
 #export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 
 %:
-	dh $@
+	dh $@ --parallel
 
 # This is example for Cmake (See https://bugs.debian.org/641051 )
 #	-DCMAKE_LIBRARY_PATH=$(DEB_HOST_MULTIARCH)
