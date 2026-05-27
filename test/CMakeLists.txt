@@ -1,5 +1,5 @@
 # So CMake can tell whether or not it can process this file
-cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.0...3.13 FATAL_ERROR)
 
 pkg_check_modules(CHECK REQUIRED check)
 

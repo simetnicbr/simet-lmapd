@@ -1,5 +1,5 @@
 # So cmake can tell whether or not it can process this file
-cmake_minimum_required(VERSION 3.0.0 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.0...3.13 FATAL_ERROR)
 
 project(simet-lmapd VERSION 0.15.6 LANGUAGES C)
 
